@@ -730,6 +730,12 @@ class AudioPage(BasePage):
         self.job_detail = tk.StringVar(value="MP3 sẽ được tải về và giải mã trực tiếp trên máy này.")
         tk.Label(right, textvariable=self.job_detail, bg=PANEL, fg=MUTED,
                  font=("Segoe UI", 8), wraplength=300, justify="left").pack(anchor="w", pady=(0, 10))
+        self.retry_button = button(
+            right,
+            "TẢI LẠI AUDIO ĐÃ TẠO",
+            self.download_latest_audio,
+        )
+        self.retry_button.pack(fill="x", pady=(0, 8))
         result_buttons = tk.Frame(right, bg=PANEL)
         result_buttons.pack(fill="x")
         button(result_buttons, "NGHE / MỞ FILE", self.play_selected, accent=True).pack(side="left", padx=(0, 8))
@@ -919,6 +925,53 @@ class AudioPage(BasePage):
 
         threading.Thread(target=work, daemon=True).start()
 
+    def download_latest_audio(self):
+        """Recover the newest completed GitHub audiobook without synthesizing it again."""
+        if self.busy:
+            return
+        try:
+            token, shared_key = load_audio_credentials()
+        except AudioGitHubError as exc:
+            messagebox.showerror("Lỗi Credential Manager", str(exc))
+            return
+        if not token or not shared_key:
+            messagebox.showinfo(
+                "Chưa cấu hình GitHub",
+                "Hãy cấu hình GitHub token và khóa AES trước khi tải lại audio."
+            )
+            self.configure_connection()
+            return
+
+        if self.audio_dir is None:
+            self.audio_dir = PROJECTS_DIR / "Audio-moi" / "audio"
+        self.audio_dir.mkdir(parents=True, exist_ok=True)
+        self.busy = True
+        self.start_button.configure(state="disabled")
+        self.retry_button.configure(state="disabled")
+        self.job_status.set("Đang tìm audiobook đã tạo gần nhất...")
+        self.job_detail.set(
+            "Tìm file audio đã ghép thành công trên GitHub; không chạy lại TTS."
+        )
+
+        def report(status):
+            try:
+                self.after(0, lambda value=status: self._set_job_status(value))
+            except tk.TclError:
+                pass
+
+        def work():
+            try:
+                client = AudioGitHubClient(token, shared_key)
+                outputs = client.download_latest_completed_audio(
+                    self.audio_dir,
+                    progress=report,
+                )
+                self.after(0, lambda paths=outputs: self._audio_job_done(paths))
+            except Exception as exc:
+                self.after(0, lambda error=str(exc): self._audio_job_failed(error))
+
+        threading.Thread(target=work, daemon=True).start()
+
     def _set_job_status(self, status):
         self.job_status.set(status)
         self.app.set_status(status)
@@ -926,6 +979,7 @@ class AudioPage(BasePage):
     def _audio_job_done(self, outputs):
         self.busy = False
         self.start_button.configure(state="normal")
+        self.retry_button.configure(state="normal")
         output_path = outputs[0] if outputs else self.audio_dir
         output_name = output_path.name if outputs else "file MP3"
         self.job_status.set(f"Hoàn tất · {output_name}")
@@ -943,6 +997,7 @@ class AudioPage(BasePage):
     def _audio_job_failed(self, error):
         self.busy = False
         self.start_button.configure(state="normal")
+        self.retry_button.configure(state="normal")
         self.job_status.set("Tác vụ thất bại")
         self.job_detail.set(error)
         self.app.set_status("Tác vụ audio thất bại.")
