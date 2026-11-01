@@ -186,11 +186,14 @@ class AudioPage(BasePage):
         self.history.delete(0, "end")
         self.history_records = self._load_history_records()
         interrupted = False
-        for record in self.history_records:
-            if record.get("status") == "running":
-                record["status"] = "failed"
-                record["error"] = "Ứng dụng đã đóng trước khi nhận kết quả từ GitHub Actions."
-                interrupted = True
+        # Only mark stale "running" entries as interrupted when the page is
+        # restored while no job is active in this application instance.
+        if not self.busy:
+            for record in self.history_records:
+                if record.get("status") == "running":
+                    record["status"] = "failed"
+                    record["error"] = "Ứng dụng đã đóng trước khi nhận kết quả từ GitHub Actions."
+                    interrupted = True
         if interrupted:
             self._save_history_records()
         known_paths = {
@@ -377,9 +380,9 @@ class AudioPage(BasePage):
         }
         self.history_records.insert(0, record)
         self._active_record_id = record_id
+        self.busy = True
         self._save_history_records()
         self._refresh_history()
-        self.busy = True
         self.start_button.configure(state="disabled")
         self.open_button.configure(state="disabled")
         self.voice_combo.configure(state="disabled")
