@@ -265,30 +265,35 @@ class AudioGitHubClient:
                 candidates.append(run)
         return candidates[0] if len(candidates) == 1 else None
 
-    def _wait_for_artifact(self, run_id: int, artifact_name: str, deadline: float):
+    def _find_artifact(self, run_id: int, artifact_name: str):
         # GitHub paginates this endpoint (30 items by default). A run with
         # hundreds of TTS segment artifacts can place the final audiobook
         # beyond the first page, so explicitly walk every page.
         per_page = 100
-        while time.monotonic() < deadline:
-            page = 1
-            while time.monotonic() < deadline:
-                data = self._request(
-                    "GET",
-                    f"actions/runs/{run_id}/artifacts",
-                    params={"per_page": per_page, "page": page},
-                )
-                artifacts = data.get("artifacts", [])
-                for artifact in artifacts:
-                    if artifact.get("name") == artifact_name and not artifact.get("expired"):
-                        return artifact
+        page = 1
+        while True:
+            data = self._request(
+                "GET",
+                f"actions/runs/{run_id}/artifacts",
+                params={"per_page": per_page, "page": page},
+            )
+            artifacts = data.get("artifacts", [])
+            for artifact in artifacts:
+                if artifact.get("name") == artifact_name and not artifact.get("expired"):
+                    return artifact
 
-                total_count = int(data.get("total_count") or 0)
-                if not artifacts or len(artifacts) < per_page:
-                    break
-                if total_count and page * per_page >= total_count:
-                    break
-                page += 1
+            total_count = int(data.get("total_count") or 0)
+            if not artifacts or len(artifacts) < per_page:
+                return None
+            if total_count and page * per_page >= total_count:
+                return None
+            page += 1
+
+    def _wait_for_artifact(self, run_id: int, artifact_name: str, deadline: float):
+        while time.monotonic() < deadline:
+            artifact = self._find_artifact(run_id, artifact_name)
+            if artifact:
+                return artifact
             time.sleep(5)
         raise AudioGitHubError(
             "Workflow đã hoàn tất nhưng chưa tìm thấy artifact MP3. "
@@ -350,6 +355,47 @@ class AudioGitHubClient:
         # GitHub returns one merged MP3. Give each local result a unique sequence name.
         numbered_audiobook = _move_to_next_numbered_audiobook(audiobook, audio_dir)
         return [numbered_audiobook]
+
+    def download_latest_completed_audio(
+        self,
+        audio_dir: str | Path,
+        progress: Callable[[str], None] | None = None,
+    ) -> list[Path]:
+        """Download the newest successful audiobook without running TTS again."""
+        data = self._request(
+            "GET",
+            f"actions/workflows/{AUDIO_WORKFLOW}/runs",
+            params={"event": "workflow_dispatch", "branch": "main", "per_page": 20},
+        )
+        for run in data.get("workflow_runs", []):
+            if run.get("status") != "completed" or run.get("conclusion") != "success":
+                continue
+
+            title = str(run.get("display_title") or run.get("name") or "")
+            prefix = "Audio job "
+            if not title.startswith(prefix):
+                continue
+            raw_job_id = title[len(prefix):].strip()
+            try:
+                job_id = uuid.UUID(raw_job_id).hex
+            except (ValueError, AttributeError):
+                continue
+
+            run_id = run.get("id")
+            if not run_id:
+                continue
+            artifact = self._find_artifact(int(run_id), f"audio-{job_id}")
+            if not artifact:
+                continue
+
+            if progress:
+                progress("Đã tìm thấy audiobook đã tạo. Đang tải và giải mã file...")
+            return self._download_and_extract(artifact, job_id, Path(audio_dir))
+
+        raise AudioGitHubError(
+            "Không tìm thấy audiobook đã tạo còn hạn tải trên GitHub. "
+            "Artifact audio được lưu tối đa 1 ngày; hãy kiểm tra tab Actions của repo."
+        )
 
     def generate_audio(
         self,
