@@ -397,6 +397,7 @@ class TranslatePage(BasePage):
             "chapters_per_batch": batch_size,
             "chapters_per_turn": turn_size,
             "profiles": {},
+            "turn_indices": {},
             "batch_translations": {},
             "completed_batches": [],
             "active_batch": None,
@@ -609,6 +610,7 @@ class TranslatePage(BasePage):
 
         def accepted(profile: str):
             self.session.setdefault("profiles", {})[str(batch_index)] = profile
+            self.session.setdefault("turn_indices", {})[str(batch_index)] = 0
             self.session["turn_index"] = 0
             self.session["engine"] = "ChatGPT của tôi"
             self._persist_session()
@@ -644,8 +646,10 @@ class TranslatePage(BasePage):
         if not turns:
             messagebox.showerror("Lỗi chia lượt", "Lô này không có nội dung để dịch.")
             return
-        turn_index = int(self.session.get("turn_index", 0))
+        turn_indices = self.session.setdefault("turn_indices", {})
+        turn_index = int(turn_indices.get(str(batch_index), self.session.get("turn_index", 0)))
         turn_index = max(0, min(turn_index, len(turns) - 1))
+        turn_indices[str(batch_index)] = turn_index
         self.session["turn_index"] = turn_index
         self._show_turn_source(batch_index, turn_index)
         prompt = self._turn_prompt(batch_index, turn_index)
@@ -688,7 +692,8 @@ class TranslatePage(BasePage):
             )
             return
         batch_index = self.active_batch
-        turn_index = int(self.session.get("turn_index", 0))
+        turn_indices = self.session.setdefault("turn_indices", {})
+        turn_index = int(turn_indices.get(str(batch_index), 0))
         turns = self._turns_for_batch(batch_index)
         translations = self.session.setdefault("batch_translations", {}).setdefault(
             str(batch_index), [""] * len(turns)
@@ -697,6 +702,7 @@ class TranslatePage(BasePage):
             translations.append("")
         translations[turn_index] = answer
         self.session["batch_translations"][str(batch_index)] = translations
+        turn_indices[str(batch_index)] = turn_index + 1
         self.session["turn_index"] = turn_index + 1
         self._persist_session()
 
@@ -707,6 +713,7 @@ class TranslatePage(BasePage):
         completed = set(int(value) for value in self.session.get("completed_batches", []))
         completed.add(batch_index)
         self.session["completed_batches"] = sorted(completed)
+        turn_indices[str(batch_index)] = 0
         self.session["turn_index"] = 0
         self._persist_session()
         if self.turn_dialog and self.turn_dialog.winfo_exists():
