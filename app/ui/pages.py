@@ -6,7 +6,7 @@ import tkinter as tk
 import webbrowser
 from tkinter import filedialog, messagebox, ttk
 
-from app.config import DOWNLOAD_DIR, WEBTOEPUB_URL, TTS_VOICES, TTS_RATES, HACHIMI_MODELS, project_dir_for
+from app.config import DOWNLOAD_DIR, PROJECTS_DIR, WEBTOEPUB_URL, TTS_VOICES, TTS_RATES, HACHIMI_MODELS, project_dir_for
 from app.utils import read_text_file, split_text, parse_drop_files
 from app.services.browser_service import open_chrome
 from app.services.epub_service import convert_epub_to_txt
@@ -240,6 +240,9 @@ class TranslatePage(BasePage):
         ).pack(side="left", padx=(8, 10))
         tk.Label(engine, text="Hachimi chạy CPU cục bộ · ChatGPT thao tác qua clipboard.",
                  bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(side="left")
+        self.model = tk.StringVar(value=list(HACHIMI_MODELS)[0])
+        ttk.Combobox(engine, textvariable=self.model, values=list(HACHIMI_MODELS),
+                     state="readonly", width=26).pack(side="right")
         self.mode_row = tk.Frame(self, bg=BG)
         self.mode_row.pack(fill="x", pady=(0, 8))
         field_label(self.mode_row, "Chế độ").pack(side="left", padx=(0, 10))
@@ -287,7 +290,6 @@ class TranslatePage(BasePage):
         button(footer, "ĐOẠN TIẾP →", self.next_chunk).pack(side="right", padx=(7, 0))
         button(footer, "← ĐOẠN TRƯỚC", self.prev_chunk).pack(side="right")
 
-        self.model = tk.StringVar(value=list(HACHIMI_MODELS)[0])
         self.source = None
         self.chunks = []
         self.translations = []
@@ -408,13 +410,25 @@ class TranslatePage(BasePage):
 
     def prompt(self):
         self.capture()
-        name = self.source.stem if self.source else "Tiểu thuyết"
-        return ("Dịch đoạn tiểu thuyết tiếng Trung sau sang tiếng Việt tự nhiên, mạch lạc; "
-                "giữ nguyên tên riêng, thuật ngữ, quan hệ xưng hô; không thêm/bớt tình tiết. "
+        name = self.story_name.get().strip() or (self.source.stem if self.source else "Tiểu thuyết")
+        if self.translation_mode.get() == "convert":
+            instruction = (
+                "Biên tập và viết lại bản convert tiếng Việt thành văn xuôi tiểu thuyết tự nhiên, "
+                "mạch lạc, trau chuốt; bỏ lối dịch máy cứng nhắc nhưng tuyệt đối không thêm, bớt "
+                "tình tiết, thông tin, cảm xúc hoặc diễn biến. Giữ nguyên tên riêng, thuật ngữ, "
+                "xưng hô và quan hệ nhân vật."
+            )
+        else:
+            instruction = (
+                "Dịch tiểu thuyết tiếng Trung sang tiếng Việt tự nhiên, mạch lạc và trau chuốt; "
+                "không bám máy móc trật tự câu tiếng Trung. Giữ nguyên tên riêng, thuật ngữ, "
+                "xưng hô và quan hệ nhân vật; không thêm hoặc lược tình tiết."
+            )
+        return (instruction + " "
                 "Giữ nguyên mọi tiêu đề chương và số chương đã được chuẩn hóa xuyên suốt toàn bộ truyện. "
                 "Khi gặp tiêu đề quyển/tập mới, tuyệt đối không đánh số chương quay lại từ 1. "
                 "Không tự ý đổi, xóa, gộp hoặc tạo thêm tiêu đề chương. "
-                "Chỉ trả bản dịch, không giải thích.\n"
+                "Chỉ trả nội dung đã xử lý, không giải thích.\n"
                 f"Tên truyện: {name} · Đoạn {self.index + 1}/{len(self.chunks)}\n\n"
                 + self.chunks[self.index])
 
