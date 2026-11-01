@@ -353,9 +353,10 @@ class AudioGitHubClient:
                         )
                     break
             elif time.monotonic() > no_run_deadline:
+                self._delete_branch(branch)
                 raise AudioGitHubError(
                     "Đã gửi lệnh nhưng không tìm thấy phiên chạy trên GitHub Actions. "
-                    "Kiểm tra quyền Actions và trạng thái workflow."
+                    "Nhánh tải lên tạm đã được dọn; kiểm tra quyền Actions và trạng thái workflow."
                 )
             time.sleep(max(3, poll_interval))
         else:
