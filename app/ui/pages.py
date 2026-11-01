@@ -13,7 +13,7 @@ from app.services.epub_service import convert_epub_to_txt
 from app.services.hachimi_service import HachimiTranslator
 from app.services.tts_service import split_chapters
 from app.services.chapter_numbering import renumber_chapters, count_chapters
-from app.services.tts_api_client import StoryTTSClient, StoryTTSAPIError, load_audio_api_settings, save_audio_api_settings
+from app.services.audio_github_client import AudioGitHubClient, AudioGitHubError, generate_shared_key, load_audio_credentials, save_audio_credentials
 from app.ui.widgets import heading, eyebrow, panel, button, text_box, field_label, try_enable_drop, BG, PANEL, PANEL_2, COPPER, RED, TEXT, MUTED, LINE, INPUT
 
 
@@ -478,6 +478,159 @@ class TranslatePage(BasePage):
         self.status.set("Dịch thất bại"); messagebox.showerror("Lỗi Hachimi", error)
 
 
+class AudioConnectionDialog(tk.Toplevel):
+    def __init__(self, parent, on_saved):
+        super().__init__(parent.winfo_toplevel())
+        self.title("Kết nối GitHub Audio")
+        self.configure(bg=BG)
+        self.geometry("720x560")
+        self.resizable(False, False)
+        self.transient(parent.winfo_toplevel())
+        self.grab_set()
+        self.on_saved = on_saved
+        self.busy = False
+
+        tk.Label(
+            self, text="KẾT NỐI PHÒNG THU GITHUB",
+            bg=BG, fg=COPPER, font=("Segoe UI", 13, "bold")
+        ).pack(anchor="w", padx=24, pady=(22, 5))
+        tk.Label(
+            self,
+            text="Token và khóa mã hóa chỉ được lưu trong Windows Credential Manager trên máy này.",
+            bg=BG, fg=MUTED, font=("Segoe UI", 9), wraplength=660, justify="left"
+        ).pack(anchor="w", padx=24, pady=(0, 16))
+
+        body = tk.Frame(self, bg=PANEL, padx=18, pady=16, highlightthickness=1, highlightbackground=LINE)
+        body.pack(fill="x", padx=22)
+        tk.Label(body, text="1. GITHUB PERSONAL ACCESS TOKEN", bg=PANEL, fg=COPPER,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        self.token_var = tk.StringVar()
+        try:
+            saved_token, saved_key = load_audio_credentials()
+        except AudioGitHubError as exc:
+            saved_token, saved_key = "", ""
+            self.initial_error = str(exc)
+        else:
+            self.initial_error = ""
+        self.token_var.set(saved_token or "")
+        token_entry = tk.Entry(
+            body, textvariable=self.token_var, show="*", bg=INPUT, fg=TEXT,
+            insertbackground=TEXT, relief="flat", font=("Segoe UI", 10)
+        )
+        token_entry.pack(fill="x", pady=(6, 6), ipady=7)
+        token_row = tk.Frame(body, bg=PANEL)
+        token_row.pack(fill="x")
+        button(token_row, "MỞ TRANG TẠO TOKEN", self.open_token_page).pack(side="left")
+        tk.Label(
+            token_row, text="Chọn riêng repo SANH-TRUYEN-AUDIO.",
+            bg=PANEL, fg=MUTED, font=("Segoe UI", 8)
+        ).pack(side="left", padx=10)
+
+        tk.Frame(body, bg=LINE, height=1).pack(fill="x", pady=14)
+        tk.Label(body, text="2. KHÓA AES-256-GCM DÙNG CHUNG", bg=PANEL, fg=COPPER,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        self.key_var = tk.StringVar(value=saved_key or "")
+        key_entry = tk.Entry(
+            body, textvariable=self.key_var, show="*", bg=INPUT, fg=TEXT,
+            insertbackground=TEXT, relief="flat", font=("Segoe UI", 10)
+        )
+        key_entry.pack(fill="x", pady=(6, 7), ipady=7)
+        key_row = tk.Frame(body, bg=PANEL)
+        key_row.pack(fill="x")
+        button(key_row, "TẠO KHÓA MỚI", self.make_key).pack(side="left")
+        button(key_row, "SAO CHÉP KHÓA", self.copy_key).pack(side="left", padx=7)
+        tk.Label(
+            body,
+            text="Đưa đúng khóa này vào GitHub → Settings → Secrets and variables → Actions "
+                 "với tên AUDIO_SHARED_KEY. Nếu tạo khóa mới, phải thay Secret trên GitHub bằng khóa mới.",
+            bg=PANEL, fg=MUTED, font=("Segoe UI", 8), wraplength=630, justify="left"
+        ).pack(anchor="w", pady=(9, 0))
+
+        permissions = tk.Frame(self, bg="#1D1412", padx=14, pady=12, highlightthickness=1, highlightbackground=LINE)
+        permissions.pack(fill="x", padx=22, pady=12)
+        tk.Label(
+            permissions, text="QUYỀN TOKEN BẮT BUỘC",
+            bg="#1D1412", fg=COPPER, font=("Segoe UI", 8, "bold")
+        ).pack(anchor="w")
+        tk.Label(
+            permissions,
+            text="Fine-grained PAT · Repository access: Only select repositories → SANH-TRUYEN-AUDIO\n"
+                 "Contents: Read and write  ·  Actions: Read and write",
+            bg="#1D1412", fg=TEXT, font=("Segoe UI", 9), justify="left"
+        ).pack(anchor="w", pady=(5, 0))
+
+        self.status_var = tk.StringVar(value=self.initial_error or "Chưa kiểm tra kết nối.")
+        tk.Label(
+            self, textvariable=self.status_var, bg=BG, fg=MUTED,
+            font=("Segoe UI", 8), wraplength=660, justify="left"
+        ).pack(anchor="w", padx=24, pady=(0, 8))
+        footer = tk.Frame(self, bg=BG)
+        footer.pack(fill="x", padx=22, pady=(0, 18))
+        self.save_button = button(footer, "KIỂM TRA & LƯU AN TOÀN", self.test_and_save, accent=True)
+        self.save_button.pack(side="right")
+        button(footer, "ĐÓNG", self.destroy).pack(side="right", padx=8)
+
+    def open_token_page(self):
+        webbrowser.open("https://github.com/settings/personal-access-tokens/new")
+
+    def make_key(self):
+        self.key_var.set(generate_shared_key())
+        self.status_var.set(
+            "Đã tạo khóa mới. Sao chép khóa và cập nhật GitHub Secret AUDIO_SHARED_KEY trước khi chạy Audio."
+        )
+
+    def copy_key(self):
+        value = self.key_var.get().strip()
+        if not value:
+            messagebox.showwarning("Chưa có khóa", "Hãy tạo hoặc nhập khóa trước.", parent=self)
+            return
+        self.clipboard_clear()
+        self.clipboard_append(value)
+        self.update()
+        self.status_var.set("Đã sao chép khóa. Hãy dán vào GitHub Secret AUDIO_SHARED_KEY.")
+
+    def test_and_save(self):
+        if self.busy:
+            return
+        token = self.token_var.get().strip()
+        key = self.key_var.get().strip()
+        if not token or not key:
+            messagebox.showwarning("Thiếu thông tin", "Cần nhập GitHub token và khóa AES.", parent=self)
+            return
+        self.busy = True
+        self.save_button.configure(state="disabled")
+        self.status_var.set("Đang kiểm tra quyền đọc repo/workflow và lưu vào Windows Credential Manager...")
+
+        def work():
+            try:
+                client = AudioGitHubClient(token, key)
+                client.test_connection()
+                save_audio_credentials(token, key)
+                self.after(0, self.saved)
+            except Exception as exc:
+                self.after(0, lambda error=str(exc): self.failed(error))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def saved(self):
+        self.busy = False
+        self.on_saved()
+        messagebox.showinfo(
+            "Đã lưu kết nối",
+            "Đã kiểm tra repo và workflow, thông tin đã được lưu trong Windows Credential Manager.\n\n"
+            "Lưu ý: GitHub không cho ứng dụng đọc lại Actions Secret. Hãy chắc chắn Secret AUDIO_SHARED_KEY "
+            "trên repo khớp chính xác với khóa vừa lưu.",
+            parent=self
+        )
+        self.destroy()
+
+    def failed(self, error):
+        self.busy = False
+        self.save_button.configure(state="normal")
+        self.status_var.set(error)
+        messagebox.showerror("Không kết nối được", error, parent=self)
+
+
 class AudioPage(BasePage):
     def __init__(self, parent, app):
         super().__init__(parent, app)
@@ -516,15 +669,21 @@ class AudioPage(BasePage):
                      values=["0.75", "1.0", "1.25", "1.5", "2.0"], state="readonly", width=9).pack(side="left", padx=7)
         actions = tk.Frame(left, bg=PANEL)
         actions.pack(fill="x", pady=(2, 0))
-        button(actions, "TẠO AUDIO", self.start_actions_job, accent=True).pack(side="left")
-        tk.Label(actions, text="Xuất một file MP3 hoàn chỉnh", bg=PANEL, fg=MUTED,
-                 font=("Segoe UI", 8)).pack(side="left", padx=12)
+        self.start_button = button(actions, "TẠO AUDIO", self.start_actions_job, accent=True)
+        self.start_button.pack(side="left")
+        button(actions, "CẤU HÌNH GITHUB", self.configure_connection).pack(side="left", padx=8)
+        tk.Label(actions, text="Xử lý trên GitHub Actions · MP3 giải mã tại máy",
+                 bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(side="left", padx=4)
 
         right = panel(columns)
         right.grid(row=0, column=1, sticky="nsew", padx=(7, 0))
         tk.Label(right, text="KẾT QUẢ AUDIO", bg=PANEL, fg=TEXT, font=("Segoe UI", 11, "bold")).pack(anchor="w")
         tk.Label(right, text="Theo dõi tiến trình và mở các file MP3 đã tạo.",
-                 bg=PANEL, fg=MUTED, font=("Segoe UI", 9)).pack(anchor="w", pady=(5, 12))
+                 bg=PANEL, fg=MUTED, font=("Segoe UI", 9)).pack(anchor="w", pady=(5, 10))
+        self.connection_status = tk.StringVar(value="Đang kiểm tra cấu hình...")
+        tk.Label(right, textvariable=self.connection_status, bg=PANEL, fg=COPPER,
+                 font=("Segoe UI", 8), wraplength=300, justify="left").pack(anchor="w", pady=(0, 10))
+        button(right, "QUẢN LÝ KẾT NỐI", self.configure_connection).pack(anchor="w", pady=(0, 10))
         tk.Label(right, text="LỊCH SỬ AUDIO", bg=PANEL, fg=COPPER,
                  font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 6))
         list_frame = tk.Frame(right, bg=INPUT, highlightthickness=1, highlightbackground=LINE)
@@ -535,7 +694,6 @@ class AudioPage(BasePage):
             selectmode="browse", height=12
         )
         self.history.pack(fill="both", expand=True, padx=5, pady=5)
-        self.history.insert("end", "Chưa có tác vụ audio")
         self.history.bind("<<ListboxSelect>>", self.on_history_select)
 
         self.job_panel = tk.Frame(right, bg="#1D1412", padx=12, pady=12,
@@ -550,7 +708,7 @@ class AudioPage(BasePage):
                  font=("Segoe UI", 8, "bold")).pack(anchor="w")
         tk.Label(status_box, textvariable=self.job_status, bg="#1D1412", fg=TEXT,
                  font=("Segoe UI", 9), wraplength=220, justify="left").pack(anchor="w", pady=(4, 0))
-        self.job_detail = tk.StringVar(value="Kết quả MP3 sẽ hiển thị tại đây.")
+        self.job_detail = tk.StringVar(value="MP3 sẽ được tải về và giải mã trực tiếp trên máy này.")
         tk.Label(right, textvariable=self.job_detail, bg=PANEL, fg=MUTED,
                  font=("Segoe UI", 8), wraplength=300, justify="left").pack(anchor="w", pady=(0, 10))
         result_buttons = tk.Frame(right, bg=PANEL)
@@ -561,6 +719,23 @@ class AudioPage(BasePage):
         self.source = None
         self.audio_dir = None
         self.history_paths = []
+        self.busy = False
+        self._update_connection_status()
+        self._refresh_history()
+
+    def _update_connection_status(self):
+        try:
+            token, key = load_audio_credentials()
+            configured = bool(token and key)
+        except AudioGitHubError:
+            configured = False
+        self.connection_status.set(
+            "● GitHub Audio đã lưu thông tin kết nối" if configured
+            else "○ Chưa cấu hình GitHub token và khóa mã hóa"
+        )
+
+    def configure_connection(self):
+        AudioConnectionDialog(self, self._update_connection_status)
 
     def drop_audio(self, data):
         paths = parse_drop_files(data)
@@ -588,22 +763,103 @@ class AudioPage(BasePage):
         self.audio_dir.mkdir(parents=True, exist_ok=True)
         self.file_label.config(text=path.name)
         self.job_status.set("Đã nạp nội dung · sẵn sàng tạo audio")
-        self.job_detail.set("Nội dung đã được nạp. Chưa gửi dữ liệu lên GitHub.")
+        self.job_detail.set("Văn bản chỉ được gửi đi sau khi mã hóa AES-256-GCM.")
+        self._refresh_history()
         self.app.set_status(f"Đã nạp {path.name}")
 
+    def _refresh_history(self):
+        if not hasattr(self, "history"):
+            return
+        files = []
+        if self.audio_dir and self.audio_dir.exists():
+            files = sorted(
+                self.audio_dir.rglob("*.mp3"),
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )
+        self.history_paths = files
+        self.history.delete(0, "end")
+        if not files:
+            self.history.insert("end", "Chưa có tác vụ audio")
+        else:
+            for path in files:
+                self.history.insert("end", f"{path.parent.name} · {path.name}")
+
     def start_actions_job(self):
+        if self.busy:
+            return
         source_text = self.content.get("1.0", "end-1c").strip()
         if not source_text:
             messagebox.showinfo("Chưa có nội dung", "Hãy mở TXT hoặc dán nội dung trước.")
             return
-        messagebox.showinfo(
-            "GitHub Actions chưa được kết nối",
-            "Giao diện Phòng thu đã được dựng theo ảnh mẫu. Phần gửi nội dung lên workflow GitHub Actions, "
-            "theo dõi tác vụ và tải MP3 cần được nối với repository riêng và quyền truy cập GitHub. "
-            "Ứng dụng chưa gửi văn bản truyện lên bất kỳ repository nào."
+        try:
+            token, shared_key = load_audio_credentials()
+        except AudioGitHubError as exc:
+            messagebox.showerror("Lỗi Credential Manager", str(exc))
+            return
+        if not token or not shared_key:
+            messagebox.showinfo(
+                "Chưa cấu hình GitHub",
+                "Hãy chọn CẤU HÌNH GITHUB, nhập Fine-grained PAT và khóa AES trước khi tạo audio."
+            )
+            self.configure_connection()
+            return
+
+        if self.audio_dir is None:
+            self.audio_dir = PROJECTS_DIR / "Audio-moi" / "audio"
+        self.audio_dir.mkdir(parents=True, exist_ok=True)
+        voice_name = self.voice.get().strip()
+        rate = float(self.rate.get())
+        self.busy = True
+        self.start_button.configure(state="disabled")
+        self.job_status.set("Đang chuẩn bị tác vụ...")
+        self.job_detail.set("Đang mã hóa nội dung; chưa tải văn bản rõ lên GitHub.")
+        self.app.set_status("Đang gửi tác vụ audio lên GitHub Actions...")
+
+        def report(status):
+            try:
+                self.after(0, lambda value=status: self._set_job_status(value))
+            except tk.TclError:
+                pass
+
+        def work():
+            try:
+                client = AudioGitHubClient(token, shared_key)
+                outputs = client.generate_audio(
+                    source_text, voice_name, rate, self.audio_dir, progress=report
+                )
+                self.after(0, lambda paths=outputs: self._audio_job_done(paths))
+            except Exception as exc:
+                self.after(0, lambda error=str(exc): self._audio_job_failed(error))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _set_job_status(self, status):
+        self.job_status.set(status)
+        self.app.set_status(status)
+
+    def _audio_job_done(self, outputs):
+        self.busy = False
+        self.start_button.configure(state="normal")
+        self.job_status.set("Hoàn tất · đã nhận MP3")
+        self.job_detail.set(
+            f"Đã tải {len(outputs)} file MP3 vào thư mục audio cục bộ. "
+            "Bản tải từ GitHub đã được giải mã bằng khóa đang lưu trên máy."
         )
-        self.job_status.set("Chưa kết nối repository / GitHub Actions")
-        self.job_detail.set("Chưa gửi dữ liệu. Cần hoàn thiện kết nối GitHub an toàn trước khi tạo tác vụ.")
+        self._refresh_history()
+        self.app.set_status(f"Đã tạo xong {len(outputs)} file MP3.")
+        messagebox.showinfo(
+            "Tạo audio hoàn tất",
+            f"Đã tạo {len(outputs)} file MP3.\nLưu tại:\n{self.audio_dir}"
+        )
+
+    def _audio_job_failed(self, error):
+        self.busy = False
+        self.start_button.configure(state="normal")
+        self.job_status.set("Tác vụ thất bại")
+        self.job_detail.set(error)
+        self.app.set_status("Tác vụ audio thất bại.")
+        messagebox.showerror("Không tạo được audio", error)
 
     def on_history_select(self, _event=None):
         return
@@ -623,11 +879,10 @@ class AudioPage(BasePage):
 
     def open_audio_folder(self):
         if not self.audio_dir:
-            messagebox.showinfo("Chưa có thư mục", "Hãy nạp TXT trước.")
+            messagebox.showinfo("Chưa có thư mục", "Hãy nạp TXT hoặc tạo audio trước.")
             return
         self.audio_dir.mkdir(parents=True, exist_ok=True)
         if os.name == "nt":
             os.startfile(self.audio_dir)
         else:
             webbrowser.open(self.audio_dir.as_uri())
-

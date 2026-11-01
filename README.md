@@ -27,12 +27,20 @@ Hai chế độ xử lý:
 Bộ đánh số chương liên tục sẽ chuẩn hóa số chương theo thứ tự xuất hiện trên toàn bộ RAW. Khi quyển mới bắt đầu lại ở chương 1, chương đó sẽ tiếp tục số sau chương cuối quyển trước. Tiêu đề quyển được giữ nguyên và file RAW gốc không bị sửa. Nhận diện tiêu đề hiện dựa vào các dòng riêng như `第一章`, `第1章`, `Chương 1` hoặc `Chapter 1`.
 
 ### 4. Phòng thu audio
-Giao diện phòng thu hiện có:
-- Mở TXT hoặc dán nội dung.
-- Chọn giọng Nam Minh / Hoài My và tốc độ đọc.
-- Khu vực lịch sử, trạng thái GitHub Actions và mở thư mục kết quả.
+- Mở TXT hoặc dán nội dung, chọn giọng Nam Minh / Hoài My và tốc độ đọc.
+- Ứng dụng gửi tác vụ đến repo công khai [SANH-TRUYEN-AUDIO](https://github.com/hantuyet425/SANH-TRUYEN-AUDIO) thông qua GitHub Actions.
+- Văn bản gửi lên GitHub được mã hóa AES-256-GCM trước khi tải lên nhánh tạm. Artifact trả về cũng được mã hóa; ứng dụng chỉ giải mã trên máy Windows rồi lưu MP3 trong thư mục audio của dự án.
+- Token GitHub và khóa AES được lưu trong Windows Credential Manager; không ghi vào `settings.json`, mã nguồn hay log.
+- Bộ máy dùng Edge TTS trực tuyến trên runner GitHub. Khi tổng hợp, văn bản được giải mã trong runner và gửi đến dịch vụ Edge TTS qua kết nối mạng để tạo giọng đọc. Không dùng workflow này cho nội dung bị cấm gửi tới dịch vụ TTS bên thứ ba.
 
-**Lưu ý quan trọng:** giao diện GitHub Actions đã được dựng, nhưng kết nối thực tế để gửi nội dung, theo dõi workflow và tải MP3 **chưa được tích hợp ở phiên bản này**. Nút tạo audio sẽ thông báo trạng thái chưa kết nối; ứng dụng không gửi văn bản truyện lên repository. Không cần cài hoặc chạy Story-TTS-API cho giao diện hiện tại.
+**Cấu hình một lần trước khi dùng:**
+1. Tạo Fine-grained Personal Access Token tại [GitHub token settings](https://github.com/settings/personal-access-tokens/new), chỉ cấp cho repo `SANH-TRUYEN-AUDIO`.
+2. Cấp quyền **Contents: Read and write** và **Actions: Read and write**.
+3. Vào SẢNH TRUYỆN → Phòng thu audio → **CẤU HÌNH GITHUB** → **TẠO KHÓA MỚI** → **SAO CHÉP KHÓA**.
+4. Mở [Settings của repo Audio](https://github.com/hantuyet425/SANH-TRUYEN-AUDIO/settings/secrets/actions), tạo Repository Secret tên chính xác `AUDIO_SHARED_KEY`, dán khóa vừa sao chép.
+5. Dán PAT và cùng khóa đó vào cửa sổ Cấu hình GitHub trong SẢNH TRUYỆN, sau đó bấm **KIỂM TRA & LƯU AN TOÀN**.
+
+Không gửi PAT hoặc khóa AES trong tin nhắn. Nếu tạo khóa mới trong ứng dụng, phải cập nhật Secret trên GitHub bằng khóa mới tương ứng. Tác vụ chạy trên GitHub-hosted runner; MP3 giải mã được lưu cục bộ trong `data/projects/<tên-truyện>/audio/`. Không cần cài hoặc chạy Story-TTS-API.
 
 ## Cài đặt trên Windows 10/11
 
