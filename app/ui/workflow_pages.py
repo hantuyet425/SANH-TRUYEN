@@ -4,7 +4,6 @@ import hashlib
 import json
 import math
 import os
-import re
 import subprocess
 import threading
 import time
@@ -20,7 +19,7 @@ from app.services.audio_github_client import (
     AudioGitHubError,
     load_audio_credentials,
 )
-from app.services.chapter_numbering import renumber_chapters
+from app.services.translation_workflow import split_story_chapters
 from app.services.hachimi_service import HachimiTranslator
 from app.ui.pages import AudioConnectionDialog, BasePage
 from app.ui.widgets import (
@@ -28,44 +27,6 @@ from app.ui.widgets import (
     button, eyebrow, field_label, heading, panel, text_box, try_enable_drop,
 )
 from app.utils import parse_drop_files, read_text_file
-
-
-_CHAPTER_LINE_RE = re.compile(
-    r"^\s*(?:第[0-9０-９零〇○一二两兩三四五六七八九十百千万萬亿億]+\s*[章节回节節集话話].*"
-    r"|(?:Chương|Chapter|Chap\.?|Hồi)\s+[0-9０-９]+.*)$",
-    re.IGNORECASE,
-)
-
-
-def split_story_chapters(text: str) -> tuple[str, list[tuple[str, str]]]:
-    """Normalize chapter numbers, then split RAW without treating volume headings as chapters."""
-    normalized, _report = renumber_chapters(text)
-    normalized = normalized.replace("\r\n", "\n").replace("\r", "\n").strip()
-    if not normalized:
-        return normalized, []
-
-    lines = normalized.splitlines(keepends=True)
-    starts: list[tuple[int, str]] = []
-    offset = 0
-    for line in lines:
-        title = line.rstrip("\r\n").strip()
-        if _CHAPTER_LINE_RE.match(title):
-            starts.append((offset, title))
-        offset += len(line)
-
-    if not starts:
-        return normalized, [("Toàn bộ RAW (không nhận diện tiêu đề chương)", normalized)]
-
-    # Keep any preface before the first chapter attached to the first segment.
-    segments: list[tuple[str, str]] = []
-    for index, (start, title) in enumerate(starts):
-        end = starts[index + 1][0] if index + 1 < len(starts) else len(normalized)
-        content = normalized[start:end].strip()
-        if index == 0 and start > 0:
-            content = normalized[:end].strip()
-        if content:
-            segments.append((title, content))
-    return normalized, segments
 
 
 class _BatchSettingsDialog(tk.Toplevel):
