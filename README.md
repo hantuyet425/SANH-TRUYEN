@@ -1,127 +1,76 @@
 # SẢNH TRUYỆN
 
-**Ứng dụng desktop Windows** để xử lý tiểu thuyết theo quy trình:
+**Ứng dụng desktop Windows viết bằng Python + Tkinter**, dành cho quy trình thu thập, biên tập và lưu trữ tiểu thuyết.
 
-**Chrome thật + WebToEpub → EPUB → TXT → Dịch Trung–Việt → Story TTS API riêng → MP3 theo chương.**
+Giao diện được thiết kế theo phong cách **Occult Library / Gothic Victorian**: nền tối, đỏ rượu vang, đồng cổ và thanh điều hướng thư viện bên trái.
 
-> Phiên bản hiện tại: **0.2.0 MVP**. Đây là bản mã nguồn thử nghiệm, chưa phải bản EXE cài đặt một lần. Cần kiểm thử trên máy Windows thực tế trước khi dùng với bộ truyện dài.
+## Các khu vực
 
-## Tải ZIP từ GitHub
+### 1. Tổng quan
+Lối vào bốn khu vực chính, thư viện dữ liệu và workspace.
 
-**Tải ZIP trực tiếp:** [SANH-TRUYEN-main.zip](https://github.com/hantuyet425/SANH-TRUYEN/archive/refs/heads/main.zip).
+### 2. Cào truyện
+- Mở Chrome thật và tiện ích WebToEpub.
+- Thu thập truyện thành EPUB.
+- Chuyển EPUB sang TXT trong thư mục dự án.
+- File RAW gốc không bị ghi đè.
 
-Hoặc tải thủ công:
-1. Mở trang [hantuyet425/SANH-TRUYEN](https://github.com/hantuyet425/SANH-TRUYEN).
-2. Nhấn nút **Code** màu xanh.
-3. Chọn **Download ZIP**.
-4. Giải nén, ví dụ vào `D:\SANH_TRUYEN`.
+### 3. Dịch truyện
+Có hai bộ máy:
+- **HachimiMT-60 cục bộ**: chạy bằng CPU, không yêu cầu GPU rời. Cần chạy `install-local-ai.bat` để cài thư viện AI.
+- **ChatGPT qua Clipboard**: ứng dụng tạo prompt, người dùng tự gửi trong ChatGPT và nhận kết quả bằng nút **NHẬN CLIPBOARD**. Ứng dụng không đăng nhập, không tự gửi tin nhắn và không đọc phản hồi ChatGPT ở nền.
 
-Bạn không cần fork repository.
+Hai chế độ xử lý:
+- **Dịch raw Trung**.
+- **Viết lại convert** thành văn xuôi tiếng Việt tự nhiên.
 
-## Cài đặt và chạy trên Windows 10/11
+Bộ đánh số chương liên tục sẽ chuẩn hóa số chương theo thứ tự xuất hiện trên toàn bộ RAW. Khi quyển mới bắt đầu lại ở chương 1, chương đó sẽ tiếp tục số sau chương cuối quyển trước. Tiêu đề quyển được giữ nguyên và file RAW gốc không bị sửa. Nhận diện tiêu đề hiện dựa vào các dòng riêng như `第一章`, `第1章`, `Chương 1` hoặc `Chapter 1`.
+
+### 4. Phòng thu audio
+Giao diện phòng thu hiện có:
+- Mở TXT hoặc dán nội dung.
+- Chọn giọng Nam Minh / Hoài My và tốc độ đọc.
+- Khu vực lịch sử, trạng thái GitHub Actions và mở thư mục kết quả.
+
+**Lưu ý quan trọng:** giao diện GitHub Actions đã được dựng, nhưng kết nối thực tế để gửi nội dung, theo dõi workflow và tải MP3 **chưa được tích hợp ở phiên bản này**. Nút tạo audio sẽ thông báo trạng thái chưa kết nối; ứng dụng không gửi văn bản truyện lên repository. Không cần cài hoặc chạy Story-TTS-API cho giao diện hiện tại.
+
+## Cài đặt trên Windows 10/11
 
 ### Chuẩn bị
+- Python 3.11 64-bit.
+- Google Chrome (phục vụ quy trình WebToEpub).
 
-- **Python 3.11**: cài Python Install Manager chính thức qua PowerShell bằng `winget install 9NQ7512CXL7T`, sau đó chạy `pymanager install 3.11`. Tài liệu hướng dẫn ở [Python.org](https://www.python.org/downloads/windows/).
-- **Google Chrome**: cài bản chính thức từ [google.com/chrome](https://www.google.com/chrome/).
+### Cài đặt
+1. Tải ZIP từ [SANH-TRUYEN](https://github.com/hantuyet425/SANH-TRUYEN/archive/refs/heads/main.zip).
+2. Giải nén vào thư mục mong muốn.
+3. Chạy `install.bat`.
+4. Khi cài xong, chạy `run.bat`.
 
-### Cài phần mềm
+Để dùng HachimiMT-60, chạy thêm `install-local-ai.bat`. Lần đầu sử dụng mô hình cần kết nối Internet để tải trọng số.
 
-1. Mở thư mục đã giải nén.
-2. Nhấn đúp `install.bat`.
-3. Chờ chương trình tạo môi trường Python riêng `.venv` và cài thư viện.
-4. Khi báo cài xong, nhấn đúp `run.bat`.
+## Dữ liệu
 
-Nếu Windows SmartScreen hiện cảnh báo với file BAT tự tạo, hãy chỉ chạy khi đã tải ZIP từ đúng repository này và đã xem nội dung script.
+Dữ liệu cá nhân được lưu trong `data\\`:
+- `downloads\\`: EPUB tải về.
+- `projects\\`: RAW, bản dịch và audio theo dự án.
+- `models\\`: bộ nhớ đệm HachimiMT.
+- `chrome_profile\\`: hồ sơ Chrome riêng.
+- `logs\\` và `temp\\`: log và file tạm.
 
-## Ba khu vực
-
-### 1. Cào truyện
-
-- Nhấn **MỞ CHROME THẬT** để mở Chrome cài trên máy với hồ sơ riêng của ứng dụng.
-- Nhấn **MỞ WEBTOEPUB** để mở trang tiện ích [WebToEpub trên Chrome Web Store](https://chromewebstore.google.com/detail/webtoepub/akiljllkbielkidmammnifcnibaigelm).
-- Cài tiện ích vào hồ sơ Chrome SẢNH TRUYỆN và ghim biểu tượng lên thanh công cụ.
-- Trong Chrome, truy cập trang truyện, mở mục lục/chương đầu, nhấn biểu tượng WebToEpub rồi **Pack EPUB**.
-- Đặt file tải xuống trong thư mục `data\downloads` nếu Chrome không tự dùng thư mục đó.
-- Quay lại ứng dụng, chọn EPUB và chuyển sang TXT.
-
-Ứng dụng dùng thư viện [ffreemt/epub2txt](https://github.com/ffreemt/epub2txt), có thể trích xuất nội dung theo danh sách chương. Không phải website nào cũng tương thích WebToEpub.
-
-### 2. Dịch truyện
-
-- Mở hoặc kéo file TXT tiếng Trung vào khung RAW.
-- Chức năng **Sao chép prompt** đưa prompt và đoạn hiện tại vào clipboard.
-- Mở ChatGPT, dán prompt, gửi. Khi có kết quả, copy phần bản dịch, quay lại ứng dụng và nhấn **Nhận clipboard**.
-- Có thể lưu bản dịch và di chuyển qua từng đoạn.
-- Để dịch cục bộ, chạy `install-local-ai.bat`, sau đó chọn mô hình Hachimi và nhấn nút dịch. Mô hình sẽ được tải khi sử dụng lần đầu.
-
-**Giới hạn ChatGPT clipboard:** đây là quy trình bán thủ công. Ứng dụng không đăng nhập tài khoản, không tự gửi tin nhắn và không tự đọc phản hồi ChatGPT trong nền. Không cần cung cấp mật khẩu, cookie hay API key.
-
-**Giới hạn Hachimi:** mô hình chạy CPU và tiêu thụ RAM; tốc độ phụ thuộc cấu hình máy. Nên thử với một đoạn ngắn trước khi dịch cả truyện. Bản MVP chưa có từ điển tên riêng / hồ sơ xưng hô chuyên sâu.
-
-### 3. Tạo Audio
-
-- Mở hoặc kéo TXT tiếng Việt vào khung nội dung.
-- Chọn giọng NamMinh hoặc HoaiMy.
-- Chọn tốc độ 0.75x, 1.0x, 1.25x, 1.5x hoặc 2.0x.
-- Nhấn **Gửi tạo Audio**. SẢNH TRUYỆN gửi mỗi chương (một AU) sang [Story-TTS-API](https://github.com/hantuyet425/Story-TTS-API). Khung bên trái hiển thị cây AU → từng đoạn (001, 002, 003...), kèm số ký tự và trạng thái đang chờ/đang tạo/đã tạo/lỗi. API chia AU thành các đoạn tối đa 5.000 ký tự, mặc định tổng hợp tối đa 100 đoạn song song. Chỉ sau khi tất cả đoạn thành công và đủ tệp MP3 tạm, API mới chuyển sang trạng thái ghép; các tệp được ghép theo số thứ tự gốc, không theo thứ tự hoàn thành. Sau khi ghép xong mới tải một MP3 hoàn chỉnh cho AU về máy.
-- Chọn một AU đã hoàn thành rồi nhấn **Nghe thử / Mở MP3**.
-
-Story-TTS-API dùng Edge TTS, cần Internet; đây không phải TTS offline. Nhận diện chương hiện dựa vào tiêu đề dạng “Chương 1”, “Chapter 1” hoặc một số mẫu tiêu đề tiếng Trung; nếu file không có tiêu đề phù hợp, toàn bộ nội dung được xem là một AU.
-
-## Kết nối Story-TTS-API
-
-Audio được xử lý bởi repository riêng, không chạy bộ tổng hợp giọng đọc trong SẢNH TRUYỆN.
-
-### Chạy API trên cùng máy Windows
-
-1. Tải [Story-TTS-API ZIP](https://github.com/hantuyet425/Story-TTS-API/archive/refs/heads/main.zip) và giải nén, ví dụ vào `D:\STORY-TTS-API`.
-2. Cài Python 3.11 64-bit nếu chưa có.
-3. Mở thư mục API và chạy `install-windows.bat`.
-4. Cuối quá trình, cửa sổ sẽ hiện API key riêng của máy. Sao chép key này; nếu quên, chạy `show-api-key.bat` trong thư mục API để xem lại.
-5. Chạy `run-windows.bat` và giữ cửa sổ đó mở trong khi tạo audio.
-6. Trong SẢNH TRUYỆN → Tạo Audio, nhập API URL `http://127.0.0.1:8000`, dán API key rồi nhấn **Lưu & Kiểm tra**.
-
-API cấp mã tác vụ, cung cấp tiến độ và danh sách trạng thái từng đoạn. Nếu có đoạn lỗi hoặc thiếu tệp, API dừng tác vụ và không cấp MP3 cuối. SẢNH TRUYỆN tải MP3 về máy và giữ mã AU theo chương.
-
-Nếu triển khai Story-TTS-API trên Render hoặc máy chủ riêng, thay URL localhost bằng URL máy chủ và dùng API key do máy chủ cấp. Không commit API key vào GitHub, không đưa key vào README hoặc ảnh chụp công khai.
-
-Mặc định API chia AU thành đoạn tối đa 5.000 ký tự và xử lý tối đa 100 đoạn đồng thời. Mức này khá cao: nếu Edge TTS trả lỗi 403/429, giảm `MAX_PARALLEL_CHUNKS` trong file `.env` của Story-TTS-API xuống 20, 10, 4, 2 hoặc 1 rồi khởi động lại API.
-
-## Thư mục dữ liệu
-
-Dữ liệu phát sinh được giữ trong `data\`:
-
-- `downloads\`: EPUB tải từ Chrome.
-- `chrome_profile\`: hồ sơ Chrome riêng của ứng dụng.
-- `projects\`: RAW, bản dịch và MP3 theo dự án.
-- `models\`: bộ nhớ đệm mô hình Hachimi.
-- `logs\`, `temp\`: log và file tạm.
-- `settings.json`: URL/API key của Story-TTS-API, chỉ lưu cục bộ và được `.gitignore` loại khỏi Git.
-
-Các thư mục dữ liệu cá nhân đã được loại khỏi Git bằng `.gitignore`. Không đẩy truyện có bản quyền, bản dịch cá nhân, cookie trình duyệt, mật khẩu, token hoặc API key lên repository công khai.
-
-## Khắc phục sự cố
-
-- **Không tìm thấy Python:** cài Python 3.11 x64, bật Add Python to PATH, đóng rồi mở lại cửa sổ Explorer.
-- **Thiếu thư viện:** chạy lại `install.bat`.
-- **Không mở được Chrome:** cài Chrome chính thức; đóng cửa sổ Chrome SẢNH TRUYỆN đang chạy rồi thử lại.
-- **Dịch Hachimi lỗi:** kiểm tra Internet khi tải mô hình lần đầu, dung lượng ổ đĩa và RAM; gửi lại nguyên văn thông báo lỗi.
-- **Edge TTS lỗi:** kiểm tra Internet và thử lại; dịch vụ bên ngoài có thể thay đổi hoặc giới hạn truy cập.
-- **Không kéo thả được file:** dùng nút mở file tương ứng. Kéo thả phụ thuộc `tkinterdnd2` và môi trường Windows.
+Không đẩy truyện, bản dịch, cookie, mật khẩu, token hay API key lên repository công khai.
 
 ## Kiểm thử
 
-Chạy trong thư mục dự án:
+Trong thư mục dự án:
 
 ```bat
-.venv\Scripts\activate.bat
+.venv\\Scripts\\activate.bat
 python -m unittest discover -s tests -v
 python -m compileall -q .
 ```
 
-Các kiểm thử hiện có chỉ kiểm tra một số hàm xử lý văn bản/chia chương; không thay thế kiểm thử giao diện, Chrome, tải mô hình hoặc TTS trên Windows.
+Các kiểm thử tự động kiểm tra cú pháp và một số logic xử lý văn bản; vẫn cần kiểm thử giao diện trên Windows thực tế.
 
 ## Thành phần bên thứ ba
 
-Xem [NOTICE.md](NOTICE.md) và [LICENSE](LICENSE). Chrome, WebToEpub và trọng số mô hình không được đóng gói trong repository này; người dùng cần cài/tải riêng và tuân thủ giấy phép/điều khoản tương ứng.
+Xem [NOTICE.md](NOTICE.md) và [LICENSE](LICENSE). Chrome, WebToEpub và trọng số HachimiMT-60 không được đóng gói cùng ứng dụng.
