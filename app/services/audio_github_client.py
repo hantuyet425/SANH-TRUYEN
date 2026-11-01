@@ -266,11 +266,29 @@ class AudioGitHubClient:
         return candidates[0] if len(candidates) == 1 else None
 
     def _wait_for_artifact(self, run_id: int, artifact_name: str, deadline: float):
+        # GitHub paginates this endpoint (30 items by default). A run with
+        # hundreds of TTS segment artifacts can place the final audiobook
+        # beyond the first page, so explicitly walk every page.
+        per_page = 100
         while time.monotonic() < deadline:
-            data = self._request("GET", f"actions/runs/{run_id}/artifacts")
-            for artifact in data.get("artifacts", []):
-                if artifact.get("name") == artifact_name and not artifact.get("expired"):
-                    return artifact
+            page = 1
+            while time.monotonic() < deadline:
+                data = self._request(
+                    "GET",
+                    f"actions/runs/{run_id}/artifacts",
+                    params={"per_page": per_page, "page": page},
+                )
+                artifacts = data.get("artifacts", [])
+                for artifact in artifacts:
+                    if artifact.get("name") == artifact_name and not artifact.get("expired"):
+                        return artifact
+
+                total_count = int(data.get("total_count") or 0)
+                if not artifacts or len(artifacts) < per_page:
+                    break
+                if total_count and page * per_page >= total_count:
+                    break
+                page += 1
             time.sleep(5)
         raise AudioGitHubError(
             "Workflow đã hoàn tất nhưng chưa tìm thấy artifact MP3. "
