@@ -480,12 +480,12 @@ class TranslatePage(BasePage):
 
 class AudioConnectionDialog(tk.Toplevel):
     def __init__(self, parent, on_saved):
-        super().__init__(parent)
+        super().__init__(parent.winfo_toplevel())
         self.title("Kết nối GitHub Audio")
         self.configure(bg=BG)
         self.geometry("720x560")
         self.resizable(False, False)
-        self.transient(parent)
+        self.transient(parent.winfo_toplevel())
         self.grab_set()
         self.on_saved = on_saved
         self.busy = False
