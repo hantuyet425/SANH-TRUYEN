@@ -306,19 +306,6 @@ class TranslatePage(BasePage):
         tk.Label(self, textvariable=self.dictionary_label, bg=BG, fg=COPPER,
                  font=("Segoe UI", 8)).pack(anchor="w", pady=(0, 7))
 
-        # Reserve a fixed footer FIRST so the primary actions cannot be pushed
-        # below the visible window by the requested-height Text widgets.
-        footer = tk.Frame(self, bg=BG)
-        footer.pack(side="bottom", fill="x", pady=(9, 0))
-        self.status = tk.StringVar(value="Mở RAW TXT để bắt đầu.")
-        tk.Label(footer, textvariable=self.status, bg=BG, fg=MUTED,
-                 font=("Segoe UI", 8), anchor="w").pack(side="left", fill="x", expand=True)
-        self.save_button = button(footer, "LƯU BẢN DỊCH", self.save_translation)
-        self.save_button.pack(side="right", padx=(8, 0))
-        self.save_button.configure(state="disabled")
-        self.start_button = button(footer, "BẮT ĐẦU DỊCH", self.start_translation, accent=True)
-        self.start_button.pack(side="right")
-
         panes = tk.Frame(self, bg=BG)
         panes.pack(fill="both", expand=True)
         panes.grid_columnconfigure(0, weight=1, uniform="translation")
@@ -329,16 +316,27 @@ class TranslatePage(BasePage):
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
         tk.Label(left, text="RAW / VĂN BẢN NGUỒN", bg=PANEL, fg=COPPER,
                  font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 7))
-        self.raw_frame, self.raw_box = text_box(left, 8)
+        self.raw_frame, self.raw_box = text_box(left, 18)
         self.raw_frame.pack(fill="both", expand=True)
 
         right = panel(panes)
         right.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
         tk.Label(right, text="BẢN DỊCH TIẾNG VIỆT", bg=PANEL, fg=COPPER,
                  font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 7))
-        self.vi_frame, self.vi_box = text_box(right, 8)
+        self.vi_frame, self.vi_box = text_box(right, 18)
         self.vi_frame.pack(fill="both", expand=True)
         try_enable_drop(self.raw_box, self.drop_raw)
+
+        footer = tk.Frame(self, bg=BG)
+        footer.pack(fill="x", pady=(9, 0))
+        self.status = tk.StringVar(value="Mở RAW TXT để bắt đầu.")
+        tk.Label(footer, textvariable=self.status, bg=BG, fg=MUTED,
+                 font=("Segoe UI", 8), anchor="w").pack(side="left", fill="x", expand=True)
+        self.save_button = button(footer, "LƯU BẢN DỊCH", self.save_translation)
+        self.save_button.pack(side="right", padx=(8, 0))
+        self.save_button.configure(state="disabled")
+        self.start_button = button(footer, "BẮT ĐẦU DỊCH", self.start_translation, accent=True)
+        self.start_button.pack(side="right")
 
         self.source: Path | None = None
         self.original_raw = ""
