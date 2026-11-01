@@ -10,3 +10,5 @@ data/logs/
 *.spec
 build/
 dist/
+data/settings.json
+data/settings.tmp
