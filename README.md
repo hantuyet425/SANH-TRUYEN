@@ -2,7 +2,7 @@
 
 **Ứng dụng desktop Windows** để xử lý tiểu thuyết theo quy trình:
 
-**Chrome thật + WebToEpub → EPUB → TXT → Dịch Trung–Việt → MP3 theo chương.**
+**Chrome thật + WebToEpub → EPUB → TXT → Dịch Trung–Việt → Story TTS API riêng → MP3 theo chương.**
 
 > Phiên bản hiện tại: **0.1.0 MVP**. Đây là bản mã nguồn thử nghiệm, chưa phải bản EXE cài đặt một lần. Cần kiểm thử trên máy Windows thực tế trước khi dùng với bộ truyện dài.
 
@@ -64,10 +64,29 @@ Nếu Windows SmartScreen hiện cảnh báo với file BAT tự tạo, hãy ch�
 - Mở hoặc kéo TXT tiếng Việt vào khung nội dung.
 - Chọn giọng NamMinh hoặc HoaiMy.
 - Chọn tốc độ 0.75x, 1.0x, 1.25x, 1.5x hoặc 2.0x.
-- Nhấn **Tạo Audio**. Kết quả được lưu thành `AU_001.mp3`, `AU_002.mp3`... trong thư mục audio của dự án.
+- Nhấn **Gửi tạo Audio**. SẢNH TRUYỆN gửi mỗi chương (một AU) sang [Story-TTS-API](https://github.com/hantuyet425/Story-TTS-API). Dịch vụ chia AU thành các đoạn tối đa 5.000 ký tự, tổng hợp tối đa 4 đoạn song song, ghép theo đúng thứ tự rồi trả một MP3 hoàn chỉnh về thư mục audio của dự án.
 - Chọn một AU đã hoàn thành rồi nhấn **Nghe thử / Mở MP3**.
 
-Audio dùng [edge-tts](https://github.com/rany2/edge-tts), cần Internet. Đây không phải mô hình TTS offline. Nhận diện chương hiện dựa vào tiêu đề dạng “Chương 1”, “Chapter 1” hoặc một số mẫu tiêu đề tiếng Trung; nếu file không có tiêu đề phù hợp, toàn bộ nội dung được xem là một AU.
+Story-TTS-API dùng Edge TTS, cần Internet; đây không phải TTS offline. Nhận diện chương hiện dựa vào tiêu đề dạng “Chương 1”, “Chapter 1” hoặc một số mẫu tiêu đề tiếng Trung; nếu file không có tiêu đề phù hợp, toàn bộ nội dung được xem là một AU.
+
+## Kết nối Story-TTS-API
+
+Audio được xử lý bởi repository riêng, không chạy bộ tổng hợp giọng đọc trong SẢNH TRUYỆN.
+
+### Chạy API trên cùng máy Windows
+
+1. Tải [Story-TTS-API ZIP](https://github.com/hantuyet425/Story-TTS-API/archive/refs/heads/main.zip) và giải nén, ví dụ vào `D:\STORY-TTS-API`.
+2. Cài Python 3.11 64-bit nếu chưa có.
+3. Mở thư mục API và chạy `install-windows.bat`.
+4. Cuối quá trình, cửa sổ sẽ hiện API key riêng của máy. Sao chép key này.
+5. Chạy `run-windows.bat` và giữ cửa sổ đó mở trong khi tạo audio.
+6. Trong SẢNH TRUYỆN → Tạo Audio, nhập API URL `http://127.0.0.1:8000`, dán API key rồi nhấn **Lưu & Kiểm tra**.
+
+API cấp mã tác vụ, cung cấp tiến độ số đoạn đã hoàn tất và trả liên kết MP3 khi xong. SẢNH TRUYỆN tải MP3 về máy và giữ mã AU theo chương.
+
+Nếu triển khai Story-TTS-API trên Render hoặc máy chủ riêng, thay URL localhost bằng URL máy chủ và dùng API key do máy chủ cấp. Không commit API key vào GitHub, không đưa key vào README hoặc ảnh chụp công khai.
+
+Mặc định API chia AU thành đoạn tối đa 5.000 ký tự và xử lý tối đa 4 đoạn đồng thời. Nếu dịch vụ Edge trả lỗi 403/429, giảm `MAX_PARALLEL_CHUNKS` trong cấu hình API xuống 2 hoặc 1.
 
 ## Thư mục dữ liệu
 
