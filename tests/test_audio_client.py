@@ -84,6 +84,56 @@ class AudioGitHubClientTests(unittest.TestCase):
     def test_client_targets_audio_worker_repository(self):
         self.assertEqual(self.client.repository, AUDIO_REPOSITORY)
 
+    def test_connection_distinguishes_missing_workflow_from_repository_access(self):
+        with patch.object(
+            self.client,
+            "_request",
+            side_effect=[
+                {"full_name": AUDIO_REPOSITORY},
+                AudioGitHubError(
+                    "GitHub trả về HTTP 404 tại "
+                    "GET /repos/hantuyet425/SANH-TRUYEN-AUDIO/actions/workflows/generate-audio.yml"
+                ),
+            ],
+        ):
+            with self.assertRaisesRegex(
+                AudioGitHubError,
+                "Đã đọc được repository.*không đọc được workflow",
+            ):
+                self.client.test_connection()
+
+    def test_connection_reports_repository_lookup_failure_separately(self):
+        with patch.object(
+            self.client,
+            "_request",
+            side_effect=AudioGitHubError(
+                "GitHub trả về HTTP 404 tại GET /repos/hantuyet425/SANH-TRUYEN-AUDIO"
+            ),
+        ):
+            with self.assertRaisesRegex(
+                AudioGitHubError,
+                "Không đọc được repository",
+            ):
+                self.client.test_connection()
+
+    def test_connection_rejects_non_active_workflow(self):
+        with patch.object(
+            self.client,
+            "_request",
+            side_effect=[
+                {"full_name": AUDIO_REPOSITORY},
+                {
+                    "path": ".github/workflows/generate-audio.yml",
+                    "state": "disabled_manually",
+                },
+            ],
+        ):
+            with self.assertRaisesRegex(
+                AudioGitHubError,
+                "disabled_manually",
+            ):
+                self.client.test_connection()
+
 
 if __name__ == "__main__":
     unittest.main()
