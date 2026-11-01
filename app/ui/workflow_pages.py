@@ -614,10 +614,15 @@ class TranslatePage(BasePage):
         self.session["turn_index"] = turn_index
         self._show_turn_source(batch_index, turn_index)
         prompt = self._turn_prompt(batch_index, turn_index)
-        title = (
-            f"Lượt dịch {turn_index + 1}/{len(turns)} · "
-            f"Lô {batch_index + 1} · {self._range_label(batch_index)}"
+        turn_chapters = turns[turn_index]
+        first_chapter = batch_index * int(self.session["chapters_per_batch"]) + turn_index * int(self.session["chapters_per_turn"]) + 1
+        last_chapter = first_chapter + len(turn_chapters) - 1
+        turn_range = (
+            "Toàn bộ RAW"
+            if len(self.chapter_segments) == 1 and "không nhận diện" in self.chapter_segments[0][0]
+            else f"chương {first_chapter}–{last_chapter}"
         )
+        title = f"Lượt dịch {turn_index + 1}/{len(turns)}: {turn_range}"
         if self.turn_dialog and self.turn_dialog.winfo_exists():
             self.turn_dialog.show_prompt(title, prompt)
             return
