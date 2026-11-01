@@ -26,70 +26,149 @@ class BasePage(tk.Frame):
 class DashboardPage(BasePage):
     def __init__(self, parent, app):
         super().__init__(parent, app)
-        heading(self, "Thư viện bí mật", "Quy trình khép kín từ bản raw đến audiobook")
-        for number, title, detail, page in [
-            ("01", "CÀO TRUYỆN", "Chrome thật · WebToEpub · EPUB → TXT", "crawl"),
-            ("02", "DỊCH TRUYỆN", "ChatGPT clipboard · HachimiMT CPU", "translate"),
-            ("03", "TẠO AUDIO", "NamMinh · HoaiMy · MP3 theo chương", "audio"),
-        ]:
-            card = panel(self, f"{number} · {title}")
-            card.pack(fill="x", pady=7)
-            tk.Label(card, text=detail, bg=PANEL, fg=MUTED, font=("Segoe UI", 10)).pack(side="left", padx=(0, 18))
-            button(card, "MỞ KHU VỰC →", lambda p=page: app.show_page(p), accent=True).pack(side="right")
+        eyebrow(self, "The Occult Library").pack(anchor="w", pady=(0, 8))
+        heading(self, "Chào mừng đến SẢNH TRUYỆN", "Không gian thu thập, biên tập và lưu giữ những câu chuyện của bạn.")
+
+        hero = tk.Frame(self, bg="#150B0C", padx=22, pady=18, highlightthickness=1, highlightbackground="#6B202B")
+        hero.pack(fill="x", pady=(2, 16))
+        hero.grid_columnconfigure(0, weight=1)
+        tk.Label(hero, text="✧   THƯ VIỆN ĐÊM TỐI   ✧", bg="#150B0C", fg=COPPER,
+                 font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w")
+        tk.Label(hero, text="Nơi những câu chuyện được đánh thức.", bg="#150B0C", fg=TEXT,
+                 font=("Segoe UI", 21, "bold")).grid(row=1, column=0, sticky="w", pady=(10, 4))
+        tk.Label(hero, text="Từ văn bản nguồn đến bản dịch và audiobook — trong một workspace gọn nhẹ.",
+                 bg="#150B0C", fg="#C4A18A", font=("Segoe UI", 9)).grid(row=2, column=0, sticky="w")
+        actions = tk.Frame(hero, bg="#150B0C")
+        actions.grid(row=3, column=0, sticky="w", pady=(14, 0))
+        button(actions, "TIẾP TỤC LÀM VIỆC", lambda: app.show_page("translate"), accent=True).pack(side="left", padx=(0, 8))
+        button(actions, "MỞ THƯ MỤC DỮ LIỆU", lambda: self.open_data()).pack(side="left")
+
+        sigil = tk.Canvas(hero, width=104, height=104, bg="#150B0C", highlightthickness=0)
+        sigil.grid(row=0, column=1, rowspan=4, padx=(20, 6))
+        for inset, color, width in [(5, COPPER, 1), (15, "#6F302A", 1), (25, RED, 2), (34, COPPER, 1)]:
+            sigil.create_oval(inset, inset, 104-inset, 104-inset, outline=color, width=width)
+        sigil.create_polygon(52, 24, 80, 52, 52, 80, 24, 52, outline=RED, fill="", width=2)
+        sigil.create_polygon(52, 34, 70, 52, 52, 70, 34, 52, outline=COPPER, fill="", width=1)
+        sigil.create_oval(47, 47, 57, 57, fill=RED, outline=RED)
+        sigil.create_line(52, 2, 52, 18, fill=COPPER)
+        sigil.create_line(52, 86, 52, 102, fill=COPPER)
+
+        cards = tk.Frame(self, bg=BG)
+        cards.pack(fill="x")
+        for col in range(3):
+            cards.grid_columnconfigure(col, weight=1, uniform="dashboard")
+        items = [
+            ("01 / COLLECT", "⇩", "CÀO TRUYỆN", "Thu thập EPUB và chuyển thành TXT.", "MỞ CÔNG CỤ", "crawl", COPPER),
+            ("02 / TRANSLATE", "文", "DỊCH TRUYỆN", "Dịch raw Trung hoặc viết lại bản convert.", "MỞ BẢN DỊCH", "translate", RED),
+            ("03 / LISTEN", "♫", "TẠO AUDIO", "Tạo MP3 dài với giọng đọc đã chọn.", "MỞ PHÒNG THU", "audio", COPPER),
+        ]
+        for index, (overline, symbol, title, detail, action, page, color) in enumerate(items):
+            card = tk.Frame(cards, bg="#15100F", padx=15, pady=14, highlightthickness=1,
+                            highlightbackground=RED if index == 1 else LINE)
+            card.grid(row=0, column=index, sticky="nsew", padx=(0 if index == 0 else 8, 0 if index == 2 else 0))
+            tk.Label(card, text=overline, bg="#15100F", fg=COPPER, font=("Segoe UI", 8, "bold")).pack(anchor="w")
+            tk.Label(card, text=symbol, bg="#15100F", fg=color, font=("Segoe UI", 23, "bold")).pack(anchor="w", pady=(9, 5))
+            tk.Label(card, text=title, bg="#15100F", fg=TEXT, font=("Segoe UI", 11, "bold")).pack(anchor="w")
+            tk.Label(card, text=detail, bg="#15100F", fg=MUTED, font=("Segoe UI", 9), wraplength=245,
+                     justify="left").pack(anchor="w", pady=(6, 12))
+            button(card, action, lambda p=page: app.show_page(p), accent=(index == 1)).pack(anchor="w")
+
+    def open_data(self):
+        path = PROJECTS_DIR
+        path.mkdir(parents=True, exist_ok=True)
+        if os.name == "nt":
+            os.startfile(path)
+        else:
+            webbrowser.open(path.as_uri())
 
 
 class CrawlPage(BasePage):
     def __init__(self, parent, app):
         super().__init__(parent, app)
-        heading(self, "Cào truyện", "Chrome thật kết hợp WebToEpub; sau đó chuyển EPUB thành TXT")
-        bar = tk.Frame(self, bg=BG); bar.pack(fill="x", pady=(0, 12))
-        button(bar, "MỞ CHROME THẬT", self.launch_chrome, accent=True).pack(side="left")
-        button(bar, "MỞ WEBTOEPUB", lambda: webbrowser.open(WEBTOEPUB_URL)).pack(side="left", padx=7)
-        button(bar, "MỞ THƯ MỤC TẢI", lambda: self.open_folder(DOWNLOAD_DIR)).pack(side="left")
-        info = panel(self, "Cách dùng")
-        info.pack(fill="x", pady=(0, 12))
-        tk.Label(info, text="Trong Chrome, mở mục lục truyện → nhấn biểu tượng WebToEpub trên thanh công cụ → Pack EPUB. File tải về sẽ hiện trong danh sách bên dưới.", bg=PANEL, fg=MUTED, wraplength=1000, justify="left").pack(anchor="w")
-        area = panel(self, "EPUB đã tải")
-        area.pack(fill="both", expand=True)
-        self.files = tk.Listbox(area, bg="#100B0A", fg=TEXT, selectbackground="#63402F", relief="flat", height=14)
-        self.files.pack(fill="both", expand=True, pady=(0, 10))
-        try_enable_drop(self.files, self.drop_epub)
-        row = tk.Frame(area, bg=PANEL); row.pack(fill="x")
-        button(row, "LÀM MỚI", self.refresh).pack(side="left")
-        button(row, "CHỌN EPUB", self.choose_epub).pack(side="left", padx=7)
-        button(row, "CHUYỂN EPUB → TXT", self.convert_selected, accent=True).pack(side="left")
-        self.note = tk.Label(row, text="Sẵn sàng", bg=PANEL, fg=MUTED, font=("Segoe UI", 8)); self.note.pack(side="left", padx=12)
+        eyebrow(self, "01 / Collect").pack(anchor="w", pady=(0, 8))
+        heading(self, "Cào truyện", "Thu thập sách điện tử và chuyển đổi thành văn bản để chuẩn bị dịch.")
+
+        columns = tk.Frame(self, bg=BG)
+        columns.pack(fill="both", expand=True)
+        columns.grid_columnconfigure(0, weight=1, uniform="crawl")
+        columns.grid_columnconfigure(1, weight=1, uniform="crawl")
+        columns.grid_rowconfigure(0, weight=1)
+
+        left = panel(columns)
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 7))
+        tk.Label(left, text="THU THẬP NGUỒN TRUYỆN", bg=PANEL, fg=TEXT, font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        tk.Label(left, text="Mở Chrome thật và dùng tiện ích WebToEpub để lưu truyện thành EPUB.",
+                 bg=PANEL, fg=MUTED, font=("Segoe UI", 9), wraplength=440, justify="left").pack(anchor="w", pady=(5, 12))
+        for number, title, detail in [
+            ("01", "MỞ TRÌNH DUYỆT", "Mở Chrome và truy cập trang truyện."),
+            ("02", "THU THẬP", "Dùng WebToEpub để xuất thành EPUB."),
+            ("03", "LƯU NGUỒN", "Giữ file EPUB trong kho cục bộ."),
+        ]:
+            row = tk.Frame(left, bg="#1D1412", padx=12, pady=10, highlightthickness=1, highlightbackground="#33201B")
+            row.pack(fill="x", pady=3)
+            tk.Label(row, text=number, bg="#1D1412", fg=RED, font=("Segoe UI", 12, "bold"), width=4).pack(side="left")
+            detail_box = tk.Frame(row, bg="#1D1412")
+            detail_box.pack(side="left", fill="x", expand=True)
+            tk.Label(detail_box, text=title, bg="#1D1412", fg=TEXT, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+            tk.Label(detail_box, text=detail, bg="#1D1412", fg=MUTED, font=("Segoe UI", 8)).pack(anchor="w", pady=(3, 0))
+        buttons = tk.Frame(left, bg=PANEL)
+        buttons.pack(fill="x", pady=(13, 0))
+        button(buttons, "MỞ CHROME / WEBTOEPUB", self.launch_chrome, accent=True).pack(side="left", padx=(0, 8))
+        button(buttons, "MỞ THƯ MỤC EPUB", lambda: self.open_folder(DOWNLOAD_DIR)).pack(side="left")
+
+        right = panel(columns)
+        right.grid(row=0, column=1, sticky="nsew", padx=(7, 0))
+        tk.Label(right, text="CHUYỂN ĐỔI TÀI LIỆU → TXT", bg=PANEL, fg=TEXT, font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        tk.Label(right, text="Trích xuất nội dung từ các định dạng tài liệu phổ biến để dùng trong mục Dịch truyện.",
+                 bg=PANEL, fg=MUTED, font=("Segoe UI", 9), wraplength=440, justify="left").pack(anchor="w", pady=(5, 12))
+        filebox = tk.Frame(right, bg=INPUT, padx=12, pady=12, highlightthickness=1, highlightbackground=LINE)
+        filebox.pack(fill="x")
+        tk.Label(filebox, text="TÀI LIỆU → TXT", bg=INPUT, fg=COPPER, font=("Segoe UI", 9, "bold")).pack(anchor="w")
+        tk.Label(filebox, text="EPUB · TXT/MD · HTML · DOCX/ODT · RTF · FB2 · PDF văn bản",
+                 bg=INPUT, fg=TEXT, font=("Segoe UI", 8)).pack(anchor="w", pady=(7, 10))
+        self.selected_file = tk.StringVar(value="Chưa chọn tài liệu")
+        tk.Label(filebox, textvariable=self.selected_file, bg=INPUT, fg=MUTED, font=("Segoe UI", 8)).pack(anchor="w")
+        actions = tk.Frame(right, bg=PANEL)
+        actions.pack(fill="x", pady=(14, 8))
+        button(actions, "CHỌN TÀI LIỆU & CHUYỂN TXT", self.choose_epub, accent=True).pack(side="left", padx=(0, 8))
+        button(actions, "MỞ RAW TXT", self.open_raw_txt).pack(side="left")
+        tk.Label(right, text="File gốc không bị xóa. EPUB được trích xuất thành TXT trong kho dự án.\nPDF scan cần OCR riêng; bản MVP không tự OCR.",
+                 bg=PANEL, fg=MUTED, font=("Segoe UI", 8), justify="left").pack(anchor="w", pady=(4, 0))
+
+        log = panel(self, "Nhật ký xử lý")
+        log.pack(fill="x", pady=(12, 0))
+        tk.Label(log, text="Thông báo khi mở công cụ hoặc chuyển đổi tài liệu sẽ xuất hiện tại đây.",
+                 bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(anchor="w")
+        self.note = tk.StringVar(value="Sẵn sàng")
+        tk.Label(log, textvariable=self.note, bg=PANEL, fg=COPPER, font=("Segoe UI", 8)).pack(anchor="w", pady=(6, 0))
 
     def launch_chrome(self):
         ok, msg = open_chrome()
-        self.note.config(text=msg); self.app.set_status(msg)
-        if not ok: messagebox.showwarning("Chrome", msg)
-
-    def refresh(self):
-        DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        self.files.delete(0, "end")
-        for path in sorted(DOWNLOAD_DIR.glob("*.epub"), key=lambda p: p.stat().st_mtime, reverse=True):
-            self.files.insert("end", path.name)
-        self.note.config(text=f"Có {self.files.size()} file EPUB")
-
-    def drop_epub(self, data):
-        for item in parse_drop_files(data):
-            p = Path(item.strip("{}"))
-            if p.suffix.lower() == ".epub" and p.exists():
-                self.convert_path(p); return
+        self.note.set(msg)
+        self.app.set_status(msg)
+        if not ok:
+            messagebox.showwarning("Chrome", msg)
+        else:
+            webbrowser.open(WEBTOEPUB_URL)
 
     def choose_epub(self):
-        p = filedialog.askopenfilename(filetypes=[("EPUB", "*.epub")])
-        if p: self.convert_path(Path(p))
-
-    def convert_selected(self):
-        try: name = self.files.get(self.files.curselection()[0])
-        except Exception:
-            messagebox.showinfo("Chưa chọn file", "Hãy chọn EPUB trước."); return
-        self.convert_path(DOWNLOAD_DIR / name)
+        p = filedialog.askopenfilename(filetypes=[
+            ("Tài liệu hỗ trợ", "*.epub *.txt *.html *.htm *.md *.docx *.odt *.rtf *.fb2 *.pdf"),
+            ("EPUB", "*.epub"), ("Text", "*.txt"), ("Tất cả tệp", "*.*")
+        ])
+        if not p:
+            return
+        source = Path(p)
+        self.selected_file.set(source.name)
+        if source.suffix.lower() == ".epub":
+            self.convert_path(source)
+        elif source.suffix.lower() == ".txt":
+            self.open_raw_path(source)
+        else:
+            messagebox.showinfo("Định dạng chưa hỗ trợ", "Bản hiện tại chỉ chuyển EPUB sang TXT trực tiếp. Các định dạng khác cần bộ chuyển đổi tương ứng.")
 
     def convert_path(self, source: Path):
-        self.note.config(text=f"Đang chuyển {source.name}...")
+        self.note.set(f"Đang chuyển {source.name}...")
         self.app.set_status("Đang chuyển EPUB → TXT")
         def work():
             try:
@@ -101,16 +180,29 @@ class CrawlPage(BasePage):
         threading.Thread(target=work, daemon=True).start()
 
     def convert_done(self, path):
-        self.note.config(text=f"Đã tạo {path.name}")
+        self.note.set(f"Đã tạo {path.name}")
         self.app.set_status("Chuyển EPUB → TXT hoàn tất")
-        if messagebox.askyesno("Hoàn tất", f"Đã lưu:\n{path}\nMở thư mục?"):
-            self.open_folder(path.parent)
+        if messagebox.askyesno("Hoàn tất", f"Đã lưu:\n{path}\n\nMở trong mục Dịch truyện?"):
+            self.open_raw_path(path)
+
+    def open_raw_txt(self):
+        p = filedialog.askopenfilename(filetypes=[("Text", "*.txt")])
+        if p:
+            self.open_raw_path(Path(p))
+
+    def open_raw_path(self, path: Path):
+        page = self.app.pages.get("translate")
+        if page:
+            page.load_path(path)
+            self.app.show_page("translate")
 
     @staticmethod
     def open_folder(path):
         path.mkdir(parents=True, exist_ok=True)
-        if os.name == "nt": os.startfile(path)
-        else: webbrowser.open(path.as_uri())
+        if os.name == "nt":
+            os.startfile(path)
+        else:
+            webbrowser.open(path.as_uri())
 
 
 class TranslatePage(BasePage):
