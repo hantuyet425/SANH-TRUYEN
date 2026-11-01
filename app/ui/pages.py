@@ -14,7 +14,7 @@ from app.services.hachimi_service import HachimiTranslator
 from app.services.tts_service import split_chapters
 from app.services.chapter_numbering import renumber_chapters, count_chapters
 from app.services.tts_api_client import StoryTTSClient, StoryTTSAPIError, load_audio_api_settings, save_audio_api_settings
-from app.ui.widgets import heading, panel, button, text_box, try_enable_drop, BG, PANEL, COPPER, TEXT, MUTED
+from app.ui.widgets import heading, eyebrow, panel, button, text_box, field_label, try_enable_drop, BG, PANEL, PANEL_2, COPPER, RED, TEXT, MUTED, LINE, INPUT
 
 
 class BasePage(tk.Frame):
