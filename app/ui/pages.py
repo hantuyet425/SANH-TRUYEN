@@ -480,92 +480,86 @@ class TranslatePage(BasePage):
 class AudioPage(BasePage):
     def __init__(self, parent, app):
         super().__init__(parent, app)
-        heading(self, "Tạo Audio", "SẢNH TRUYỆN gửi nội dung sang Story TTS API riêng; dịch vụ trả MP3 hoàn chỉnh về đây")
+        eyebrow(self, "03 / Listen").pack(anchor="w", pady=(0, 8))
+        heading(self, "Phòng thu audio", "Biến bản truyện thành MP3 dài với giọng đọc và tốc độ bạn lựa chọn.")
 
-        saved = load_audio_api_settings()
-        connection = panel(self, "Kết nối dịch vụ Story TTS API")
-        connection.pack(fill="x", pady=(0, 10))
-        row = tk.Frame(connection, bg=PANEL)
-        row.pack(fill="x")
-        tk.Label(row, text="API URL", bg=PANEL, fg=MUTED).pack(side="left")
-        self.api_url = tk.StringVar(value=saved["url"])
-        ttk.Entry(row, textvariable=self.api_url, width=39).pack(side="left", padx=(6, 14))
-        tk.Label(row, text="API KEY", bg=PANEL, fg=MUTED).pack(side="left")
-        self.api_key = tk.StringVar(value=saved["api_key"])
-        ttk.Entry(row, textvariable=self.api_key, width=35, show="•").pack(side="left", padx=6)
-        button(row, "LƯU & KIỂM TRA", self.check_api, accent=True).pack(side="left", padx=(8, 0))
-        button(row, "REPO API", lambda: webbrowser.open("https://github.com/hantuyet425/Story-TTS-API")).pack(side="right", padx=(8, 0))
-        tk.Label(
-            connection,
-            text="Mặc định: http://127.0.0.1:8000 · API key được lưu cục bộ trong data/settings.json, không đưa lên GitHub.",
-            bg=PANEL, fg=MUTED, font=("Segoe UI", 8)
-        ).pack(anchor="w", pady=(8, 0))
+        columns = tk.Frame(self, bg=BG)
+        columns.pack(fill="both", expand=True)
+        columns.grid_columnconfigure(0, weight=6)
+        columns.grid_columnconfigure(1, weight=4)
+        columns.grid_rowconfigure(0, weight=1)
 
-        top = tk.Frame(self, bg=BG)
-        top.pack(fill="x", pady=(0, 10))
-        button(top, "MỞ FILE TXT ĐÃ DỊCH", self.load_file, accent=True).pack(side="left")
-        self.file_label = tk.Label(top, text="Chưa chọn file", bg=BG, fg=MUTED)
-        self.file_label.pack(side="left", padx=10)
-
-        source_panel = panel(self, "Nội dung nguồn · có thể xem/sửa trước khi tạo")
-        source_panel.pack(fill="x", pady=(0, 8))
-        self.content_frame, self.content = text_box(source_panel, 5)
-        self.content_frame.pack(fill="x")
+        left = panel(columns)
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 7))
+        tk.Label(left, text="NỘI DUNG AUDIO", bg=PANEL, fg=TEXT, font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        tk.Label(left, text="Dán toàn bộ nội dung hoặc mở một file TXT đã dịch.",
+                 bg=PANEL, fg=MUTED, font=("Segoe UI", 9)).pack(anchor="w", pady=(5, 10))
+        file_row = tk.Frame(left, bg=PANEL)
+        file_row.pack(fill="x", pady=(0, 8))
+        button(file_row, "MỞ FILE TXT", self.load_file, accent=True).pack(side="left")
+        self.file_label = tk.Label(file_row, text="Chưa chọn file", bg=PANEL, fg=MUTED, font=("Segoe UI", 8))
+        self.file_label.pack(side="left", padx=12)
+        self.content_frame, self.content = text_box(left, 16)
+        self.content_frame.pack(fill="both", expand=True)
         try_enable_drop(self.content, self.drop_audio)
 
-        panes = tk.Frame(self, bg=BG)
-        panes.pack(fill="both", expand=True)
-        panes.grid_columnconfigure(0, weight=5)
-        panes.grid_columnconfigure(1, weight=4)
-        panes.grid_rowconfigure(0, weight=1)
-        left = panel(panes, "Danh sách đoạn xử lý · theo thứ tự gốc")
-        left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
-        right = panel(panes, "Kết quả MP3 hoàn chỉnh theo AU")
-        right.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        controls = tk.Frame(left, bg="#1D1412", padx=10, pady=9, highlightthickness=1, highlightbackground=LINE)
+        controls.pack(fill="x", pady=(10, 8))
+        field_label(controls, "Giọng đọc", bg="#1D1412").pack(side="left")
+        self.voice = tk.StringVar(value="Nam Minh")
+        ttk.Combobox(controls, textvariable=self.voice,
+                     values=["Nam Minh", "Hoài My"], state="readonly", width=16).pack(side="left", padx=(7, 18))
+        field_label(controls, "Tốc độ", bg="#1D1412").pack(side="left")
+        self.rate = tk.StringVar(value="1.25")
+        ttk.Combobox(controls, textvariable=self.rate,
+                     values=["0.75", "1.0", "1.25", "1.5", "2.0"], state="readonly", width=9).pack(side="left", padx=7)
+        actions = tk.Frame(left, bg=PANEL)
+        actions.pack(fill="x", pady=(2, 0))
+        button(actions, "TẠO AUDIO", self.start_actions_job, accent=True).pack(side="left")
+        tk.Label(actions, text="Xuất một file MP3 hoàn chỉnh", bg=PANEL, fg=MUTED,
+                 font=("Segoe UI", 8)).pack(side="left", padx=12)
 
-        self.segments = ttk.Treeview(
-            left, columns=("length", "state"), show="tree headings", height=18
+        right = panel(columns)
+        right.grid(row=0, column=1, sticky="nsew", padx=(7, 0))
+        tk.Label(right, text="KẾT QUẢ AUDIO", bg=PANEL, fg=TEXT, font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        tk.Label(right, text="Theo dõi tiến trình và mở các file MP3 đã tạo.",
+                 bg=PANEL, fg=MUTED, font=("Segoe UI", 9)).pack(anchor="w", pady=(5, 12))
+        tk.Label(right, text="LỊCH SỬ AUDIO", bg=PANEL, fg=COPPER,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 6))
+        list_frame = tk.Frame(right, bg=INPUT, highlightthickness=1, highlightbackground=LINE)
+        list_frame.pack(fill="both", expand=True)
+        self.history = tk.Listbox(
+            list_frame, bg=INPUT, fg=TEXT, selectbackground="#5B1A25",
+            relief="flat", bd=0, font=("Segoe UI", 9), activestyle="none",
+            selectmode="browse", height=12
         )
-        self.segments.heading("#0", text="AU / ĐOẠN")
-        self.segments.heading("length", text="ĐỘ DÀI")
-        self.segments.heading("state", text="TRẠNG THÁI")
-        self.segments.column("#0", width=230, minwidth=150, stretch=True)
-        self.segments.column("length", width=95, anchor="center", stretch=False)
-        self.segments.column("state", width=125, anchor="w", stretch=False)
-        segment_scroll = ttk.Scrollbar(left, orient="vertical", command=self.segments.yview)
-        self.segments.configure(yscrollcommand=segment_scroll.set)
-        self.segments.pack(side="left", fill="both", expand=True)
-        segment_scroll.pack(side="right", fill="y")
+        self.history.pack(fill="both", expand=True, padx=5, pady=5)
+        self.history.insert("end", "Chưa có tác vụ audio")
+        self.history.bind("<<ListboxSelect>>", self.on_history_select)
 
-        self.results = ttk.Treeview(right, columns=("au", "state", "file"), show="headings", height=18)
-        for col, label, width in [
-            ("au", "TÁC VỤ", 175),
-            ("state", "TIẾN ĐỘ API", 155),
-            ("file", "FILE MP3", 130),
-        ]:
-            self.results.heading(col, text=label)
-            self.results.column(col, width=width)
-        self.results.pack(fill="both", expand=True)
-
-        settings = tk.Frame(self, bg=BG)
-        settings.pack(fill="x", pady=10)
-        tk.Label(settings, text="Giọng", bg=BG, fg=MUTED).pack(side="left")
-        self.voice = tk.StringVar(value=list(TTS_VOICES)[0])
-        ttk.Combobox(settings, textvariable=self.voice, values=list(TTS_VOICES), state="readonly", width=18).pack(side="left", padx=6)
-        tk.Label(settings, text="Tốc độ", bg=BG, fg=MUTED).pack(side="left")
-        self.rate = tk.StringVar(value="1.0x")
-        ttk.Combobox(settings, textvariable=self.rate, values=list(TTS_RATES), state="readonly", width=8).pack(side="left", padx=6)
-        button(settings, "GỬI TẠO AUDIO", self.generate, accent=True).pack(side="left", padx=6)
-        button(settings, "NGHE THỬ / MỞ MP3", self.play_selected).pack(side="left")
-        button(settings, "MỞ THƯ MỤC AUDIO", self.open_audio_folder).pack(side="left", padx=6)
-        self.status = tk.StringVar(value="Sẵn sàng")
-        tk.Label(settings, textvariable=self.status, bg=BG, fg=COPPER).pack(side="left", padx=8)
+        self.job_panel = tk.Frame(right, bg="#1D1412", padx=12, pady=12,
+                                  highlightthickness=1, highlightbackground=LINE)
+        self.job_panel.pack(fill="x", pady=(9, 9))
+        self.job_status = tk.StringVar(value="Chưa có tác vụ")
+        tk.Label(self.job_panel, text="◌", bg="#1D1412", fg=COPPER,
+                 font=("Segoe UI", 22)).pack(side="left", padx=(0, 12))
+        status_box = tk.Frame(self.job_panel, bg="#1D1412")
+        status_box.pack(side="left", fill="x", expand=True)
+        tk.Label(status_box, text="GITHUB ACTIONS", bg="#1D1412", fg=COPPER,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        tk.Label(status_box, textvariable=self.job_status, bg="#1D1412", fg=TEXT,
+                 font=("Segoe UI", 9), wraplength=220, justify="left").pack(anchor="w", pady=(4, 0))
+        self.job_detail = tk.StringVar(value="Kết quả MP3 sẽ hiển thị tại đây.")
+        tk.Label(right, textvariable=self.job_detail, bg=PANEL, fg=MUTED,
+                 font=("Segoe UI", 8), wraplength=300, justify="left").pack(anchor="w", pady=(0, 10))
+        result_buttons = tk.Frame(right, bg=PANEL)
+        result_buttons.pack(fill="x")
+        button(result_buttons, "NGHE / MỞ FILE", self.play_selected, accent=True).pack(side="left", padx=(0, 8))
+        button(result_buttons, "MỞ THƯ MỤC", self.open_audio_folder).pack(side="left")
 
         self.source = None
         self.audio_dir = None
-        self.pending = queue.Queue()
-        self.running = False
-        self.segment_roots = {}
+        self.history_paths = []
 
     def drop_audio(self, data):
         paths = parse_drop_files(data)
@@ -592,242 +586,47 @@ class AudioPage(BasePage):
         self.audio_dir = project_dir_for(path) / "audio"
         self.audio_dir.mkdir(parents=True, exist_ok=True)
         self.file_label.config(text=path.name)
-        self.status.set("Đã nạp nội dung.")
+        self.job_status.set("Đã nạp nội dung · sẵn sàng tạo audio")
+        self.job_detail.set("Nội dung đã được nạp. Chưa gửi dữ liệu lên GitHub.")
+        self.app.set_status(f"Đã nạp {path.name}")
 
-    def check_api(self):
-        url = self.api_url.get().strip().rstrip("/")
-        key = self.api_key.get().strip()
-        if not url or not key:
-            messagebox.showwarning("Thiếu cấu hình", "Nhập API URL và API key trước.")
+    def start_actions_job(self):
+        source_text = self.content.get("1.0", "end-1c").strip()
+        if not source_text:
+            messagebox.showinfo("Chưa có nội dung", "Hãy mở TXT hoặc dán nội dung trước.")
             return
-        try:
-            save_audio_api_settings(url, key)
-        except Exception as exc:
-            messagebox.showerror("Không lưu được", str(exc))
-            return
-        self.status.set("Đang kiểm tra Story TTS API...")
-        def worker():
-            try:
-                client = StoryTTSClient(url, key)
-                result = client.check_connection()
-                voices = ", ".join(item.get("name", item.get("id", "")) for item in result.get("voices", []))
-                self.after(0, lambda: self.status.set(f"Kết nối thành công · {voices}"))
-            except Exception as exc:
-                self.after(0, lambda e=str(exc): self.status.set(f"API chưa kết nối: {e}"))
-        threading.Thread(target=worker, daemon=True).start()
+        messagebox.showinfo(
+            "GitHub Actions chưa được kết nối",
+            "Giao diện Phòng thu đã được dựng theo ảnh mẫu. Phần gửi nội dung lên workflow GitHub Actions, "
+            "theo dõi tác vụ và tải MP3 cần được nối với repository riêng và quyền truy cập GitHub. "
+            "Ứng dụng chưa gửi văn bản truyện lên bất kỳ repository nào."
+        )
+        self.job_status.set("Chưa kết nối repository / GitHub Actions")
+        self.job_detail.set("Chưa gửi dữ liệu. Cần hoàn thiện kết nối GitHub an toàn trước khi tạo tác vụ.")
 
-    def generate(self):
-        if self.running:
-            messagebox.showinfo("Đang chạy", "Tác vụ gửi audio đang chạy.")
-            return
-        text = self.content.get("1.0", "end-1c").strip()
-        if not text:
-            messagebox.showinfo("Thiếu nội dung", "Hãy mở TXT hoặc kéo file vào khung trái.")
-            return
-        url = self.api_url.get().strip().rstrip("/")
-        key = self.api_key.get().strip()
-        if not url or not key:
-            messagebox.showwarning("Thiếu kết nối", "Nhập API URL và API key, sau đó nhấn LƯU & KIỂM TRA.")
-            return
-        try:
-            save_audio_api_settings(url, key)
-        except Exception as exc:
-            messagebox.showerror("Không lưu được cấu hình", str(exc))
-            return
-        if self.audio_dir is None:
-            self.audio_dir = Path.cwd() / "data" / "audio"
-            self.audio_dir.mkdir(parents=True, exist_ok=True)
-
-        chapters = split_chapters(text)
-        if not chapters:
-            messagebox.showwarning("Không có nội dung", "Không tìm thấy nội dung audio.")
-            return
-        self.results.delete(*self.results.get_children())
-        self.segments.delete(*self.segments.get_children())
-        self.segment_roots = {}
-        for index, (title, _body) in enumerate(chapters, 1):
-            self.results.insert(
-                "", "end", iid=str(index),
-                values=(f"AU ({index}) · {title[:22]}", "Đang chờ", f"AU_{index:03d}.mp3")
-            )
-            root_id = f"au-{index}"
-            self.segment_roots[index] = root_id
-            self.segments.insert(
-                "", "end", iid=root_id, text=f"AU ({index}) · {title[:32]}",
-                values=("Chờ tách đoạn", "Đang chờ"), open=True
-            )
-        voice = TTS_VOICES[self.voice.get()]
-        try:
-            rate = float(self.rate.get().rstrip("x"))
-        except ValueError:
-            messagebox.showerror("Tốc độ không hợp lệ", "Hãy chọn lại tốc độ đọc.")
-            return
-        self.running = True
-        self.status.set("Đang gửi nội dung sang Story TTS API...")
-        threading.Thread(
-            target=self.audio_worker,
-            args=(chapters, voice, rate, url, key),
-            daemon=True,
-        ).start()
-        self.after(300, self.poll_audio)
-
-    def audio_worker(self, chapters, voice, rate, api_url, api_key):
-        client = None
-        successes = 0
-        failures = []
-        try:
-            client = StoryTTSClient(api_url, api_key)
-            for index, (title, body) in enumerate(chapters, 1):
-                self.pending.put(("state", index, "Đang gửi API"))
-                try:
-                    chapter_id = f"{self.source.stem if self.source else 'story'}/AU-{index:04d}"
-                    job = client.create_job(body, voice, rate, chapter_id)
-                    job_id = int(job["job_id"])
-                    self.pending.put(("job_id", index, job_id))
-                    if job.get("status") != "completed":
-                        def on_update(item, i=index):
-                            completed = int(item.get("completed_chunks", 0))
-                            total = int(item.get("chunk_count", 0))
-                            percent = int(item.get("progress_percent", 0))
-                            segments = item.get("segments", [])
-                            self.pending.put((
-                                "progress", i, item.get("status", "queued"),
-                                completed, total, percent, segments
-                            ))
-                        job = client.wait_for_job(job_id, on_update=on_update, poll_seconds=3.0)
-                    path = self.audio_dir / f"AU_{index:03d}.mp3"
-                    client.download_audio(job, path)
-                    successes += 1
-                    self.pending.put(("done_one", index, str(path)))
-                except Exception as exc:
-                    failures.append(f"AU ({index}): {exc}")
-                    self.pending.put(("failed_one", index, str(exc)))
-            self.pending.put(("done", successes, len(chapters), failures))
-        except Exception as exc:
-            self.pending.put(("error", str(exc)))
-
-    def refresh_segment_rows(self, au_index, job_state, segments):
-        """Render each server-side segment under its AU, preserving source numbering."""
-        root_id = self.segment_roots.get(au_index, f"au-{au_index}")
-        if not self.segments.exists(root_id):
-            self.segments.insert("", "end", iid=root_id, text=f"AU ({au_index})", open=True)
-            self.segment_roots[au_index] = root_id
-
-        state_names = {
-            "queued": "Đang chờ", "generating": "Đang tạo",
-            "completed": "Đã tạo xong", "failed": "Lỗi",
-        }
-        root_names = {
-            "queued": "Đang chờ", "generating": "Đang tạo đoạn",
-            "merging": "Đang ghép MP3", "completed": "Đã ghép MP3",
-            "failed": "Thất bại",
-        }
-        current_values = list(self.segments.item(root_id, "values"))
-        total = len(segments) or (current_values[0] if current_values else "Chờ tách đoạn")
-        if isinstance(total, int):
-            total = f"{total} đoạn"
-        self.segments.item(root_id, values=(total, root_names.get(job_state, job_state)))
-
-        for segment in sorted(segments, key=lambda part: int(part.get("index", 0))):
-            number = int(segment.get("index", 0))
-            if number < 1:
-                continue
-            iid = f"seg-{au_index}-{number}"
-            label = segment.get("label") or f"Đoạn {number:03d}"
-            char_count = int(segment.get("char_count", 0))
-            status = state_names.get(segment.get("status", "queued"), segment.get("status", "queued"))
-            if segment.get("error"):
-                status = "Lỗi · " + str(segment["error"])[:70]
-            values = (f"{char_count:,} ký tự", status)
-            if self.segments.exists(iid):
-                self.segments.item(iid, text=label, values=values)
-            else:
-                self.segments.insert(root_id, "end", iid=iid, text=label, values=values)
-        self.segments.item(root_id, open=True)
-
-    def poll_audio(self):
-        try:
-            while True:
-                item = self.pending.get_nowait()
-                kind = item[0]
-                if kind == "state":
-                    index, state = item[1], item[2]
-                    values = list(self.results.item(str(index), "values"))
-                    values[1] = state
-                    self.results.item(str(index), values=values)
-                    self.status.set(f"Đang xử lý AU ({index})...")
-                elif kind == "job_id":
-                    index, job_id = item[1], item[2]
-                    values = list(self.results.item(str(index), "values"))
-                    values[1] = f"Đã nhận job #{job_id}"
-                    self.results.item(str(index), values=values)
-                elif kind == "progress":
-                    index, state, completed, total, percent, segments = item[1:]
-                    values = list(self.results.item(str(index), "values"))
-                    state_names = {
-                        "queued": "Đang chờ", "generating": "Đang tạo đoạn",
-                        "merging": "ĐANG GHÉP MP3", "completed": "Hoàn thành",
-                        "failed": "Thất bại",
-                    }
-                    values[1] = f"{state_names.get(state, state)} · {completed}/{total} ({percent}%)"
-                    self.results.item(str(index), values=values)
-                    self.refresh_segment_rows(index, state, segments)
-                    self.status.set(f"AU ({index}) · {completed}/{total} đoạn · {percent}%")
-                elif kind == "done_one":
-                    index, path = item[1], item[2]
-                    values = list(self.results.item(str(index), "values"))
-                    values[1] = "Hoàn thành · MP3 đã tải"
-                    values[2] = Path(path).name
-                    self.results.item(str(index), values=values)
-                    self.refresh_segment_rows(index, "completed", [])
-                elif kind == "failed_one":
-                    index, error = item[1], item[2]
-                    values = list(self.results.item(str(index), "values"))
-                    values[1] = "Thất bại"
-                    self.results.item(str(index), values=values)
-                    self.refresh_segment_rows(index, "failed", [])
-                    self.status.set(f"AU ({index}) thất bại")
-                elif kind == "done":
-                    successes, total, failures = item[1:]
-                    self.running = False
-                    if failures:
-                        self.status.set(f"Hoàn tất {successes}/{total} AU · có {len(failures)} lỗi")
-                        messagebox.showwarning(
-                            "Audio hoàn tất một phần",
-                            f"Đã tạo {successes}/{total} AU.\n\n" + "\n".join(failures[:8])
-                        )
-                    else:
-                        self.status.set(f"Đã tạo xong {successes} AU.")
-                        messagebox.showinfo("Hoàn thành", f"MP3 được tải về:\n{self.audio_dir}")
-                elif kind == "error":
-                    self.running = False
-                    self.status.set("Có lỗi khi kết nối API")
-                    messagebox.showerror("Story TTS API", item[1])
-        except queue.Empty:
-            pass
-        if self.running:
-            self.after(300, self.poll_audio)
+    def on_history_select(self, _event=None):
+        return
 
     def play_selected(self):
-        selection = self.results.selection()
-        if not selection:
-            messagebox.showinfo("Chọn AU", "Hãy chọn một AU trong danh sách.")
-            return
-        filename = self.results.item(selection[0], "values")[2]
-        path = self.audio_dir / filename
-        if not path.exists():
-            messagebox.showwarning("Chưa có file", "AU này chưa tải hoàn tất.")
-            return
-        if os.name == "nt":
-            os.startfile(path)
+        selection = self.history.curselection()
+        if selection and selection[0] < len(self.history_paths):
+            path = self.history_paths[selection[0]]
+            if path.exists() and os.name == "nt":
+                os.startfile(path)
+            elif path.exists():
+                webbrowser.open(path.as_uri())
+            else:
+                messagebox.showwarning("Chưa có file", "File MP3 này không còn tồn tại.")
         else:
-            webbrowser.open(path.as_uri())
+            messagebox.showinfo("Chưa có MP3", "Chưa có tác vụ audio hoàn thành.")
 
     def open_audio_folder(self):
         if not self.audio_dir:
             messagebox.showinfo("Chưa có thư mục", "Hãy nạp TXT trước.")
             return
+        self.audio_dir.mkdir(parents=True, exist_ok=True)
         if os.name == "nt":
             os.startfile(self.audio_dir)
         else:
             webbrowser.open(self.audio_dir.as_uri())
+
