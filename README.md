@@ -22,7 +22,7 @@ Bạn không cần fork repository.
 
 ### Chuẩn bị
 
-- **Python 3.11 64-bit**: tải tại [python.org](https://www.python.org/downloads/windows/). Khi cài, đánh dấu **Add Python to PATH**.
+- **Python 3.11**: cài Python Install Manager chính thức qua PowerShell bằng `winget install 9NQ7512CXL7T`, sau đó chạy `pymanager install 3.11`. Tài liệu hướng dẫn ở [Python.org](https://www.python.org/downloads/windows/).
 - **Google Chrome**: cài bản chính thức từ [google.com/chrome](https://www.google.com/chrome/).
 
 ### Cài phần mềm
