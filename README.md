@@ -4,7 +4,7 @@
 
 **Chrome thật + WebToEpub → EPUB → TXT → Dịch Trung–Việt → Story TTS API riêng → MP3 theo chương.**
 
-> Phiên bản hiện tại: **0.1.0 MVP**. Đây là bản mã nguồn thử nghiệm, chưa phải bản EXE cài đặt một lần. Cần kiểm thử trên máy Windows thực tế trước khi dùng với bộ truyện dài.
+> Phiên bản hiện tại: **0.2.0 MVP**. Đây là bản mã nguồn thử nghiệm, chưa phải bản EXE cài đặt một lần. Cần kiểm thử trên máy Windows thực tế trước khi dùng với bộ truyện dài.
 
 ## Tải ZIP từ GitHub
 
