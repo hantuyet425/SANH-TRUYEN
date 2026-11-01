@@ -112,6 +112,41 @@ class AudioGitHubClientTests(unittest.TestCase):
                         {"id": 9876}, self.job_id, Path(temporary)
                     )
 
+    def test_wait_for_artifact_searches_past_first_github_page(self):
+        first_page = {
+            "total_count": 150,
+            "artifacts": [
+                {"id": index, "name": f"audio-segment-{index}", "expired": False}
+                for index in range(100)
+            ],
+        }
+        second_page = {
+            "total_count": 150,
+            "artifacts": [
+                {"id": 98765, "name": "audio-final", "expired": False}
+            ],
+        }
+
+        with patch.object(
+            self.client,
+            "_request",
+            side_effect=[first_page, second_page],
+        ) as request:
+            artifact = self.client._wait_for_artifact(
+                12345, "audio-final", deadline=float("inf")
+            )
+
+        self.assertEqual(artifact["id"], 98765)
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(
+            request.call_args_list[0].kwargs["params"],
+            {"per_page": 100, "page": 1},
+        )
+        self.assertEqual(
+            request.call_args_list[1].kwargs["params"],
+            {"per_page": 100, "page": 2},
+        )
+
     def test_client_targets_audio_worker_repository(self):
         self.assertEqual(self.client.repository, AUDIO_REPOSITORY)
 
