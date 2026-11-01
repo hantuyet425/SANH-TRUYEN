@@ -51,6 +51,7 @@ class AudioPage(BasePage):
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
         # Grid keeps the content editor flexible while permanently reserving
         # visible rows for voice, speed and the Create Audio action.
+        # A compact editor height is intentional; it expands with the window.
         left.grid_columnconfigure(0, weight=1)
         left.grid_rowconfigure(1, weight=1)
         tk.Label(left, text="NỘI DUNG TẠO", bg=PANEL, fg=TEXT,
