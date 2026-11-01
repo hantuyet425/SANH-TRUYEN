@@ -32,7 +32,7 @@ from app.utils import parse_drop_files, read_text_file
 
 _CHAPTER_LINE_RE = re.compile(
     r"^\s*(?:第[0-9０-９零〇○一二两兩三四五六七八九十百千万萬亿億]+\s*[章节回节節集话話].*"
-    r"|(?:Chương|Chapter|Chap\.?|Hồi)\s+[0-9０-９０-９]+.*)$",
+    r"|(?:Chương|Chapter|Chap\.?|Hồi)\s+[0-9０-９]+.*)$",
     re.IGNORECASE,
 )
 
@@ -378,6 +378,7 @@ class TranslatePage(BasePage):
         self.start_button.pack(side="right")
 
         self.source: Path | None = None
+        self.original_raw = ""
         self.normalized_raw = ""
         self.chapter_segments: list[tuple[str, str]] = []
         self.dictionary_text = ""
@@ -441,6 +442,7 @@ class TranslatePage(BasePage):
             return
 
         self.source = path
+        self.original_raw = raw
         self.normalized_raw = normalized
         self.chapter_segments = segments
         project_dir = project_dir_for(path)
@@ -545,7 +547,7 @@ class TranslatePage(BasePage):
             )
             if not reset:
                 return
-            self.session = self._new_session(self.source, self.normalized_raw, batch_size, turn_size)
+            self.session = self._new_session(self.source, self.original_raw, batch_size, turn_size)
         else:
             self.session["chapters_per_batch"] = batch_size
             self.session["chapters_per_turn"] = turn_size
