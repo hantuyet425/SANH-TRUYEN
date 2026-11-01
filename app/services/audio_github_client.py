@@ -262,9 +262,14 @@ class AudioGitHubClient:
         except zipfile.BadZipFile as exc:
             raise AudioGitHubError("Gói audio sau giải mã không phải ZIP hợp lệ.") from exc
 
-        if not outputs:
-            raise AudioGitHubError("Tác vụ đã chạy nhưng không có MP3 trong kết quả.")
-        return outputs
+        audiobook = job_dir / "audiobook.mp3"
+        if not audiobook.is_file() or audiobook not in outputs:
+            raise AudioGitHubError(
+                "Gói kết quả không có audiobook.mp3 hoàn chỉnh. "
+                "Hãy cập nhật worker SANH-TRUYEN-AUDIO lên phiên bản mới nhất."
+            )
+        # The current protocol returns one complete MP3 for the whole novel.
+        return [audiobook]
 
     def generate_audio(
         self,
@@ -376,5 +381,5 @@ class AudioGitHubClient:
         )
         outputs = self._download_and_extract(artifact, job_id, audio_dir)
         if progress:
-            progress(f"Đã nhận {len(outputs)} file MP3.")
+            progress("Đã nhận audiobook.mp3 hoàn chỉnh.")
         return outputs
