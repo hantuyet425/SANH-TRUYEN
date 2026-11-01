@@ -6,8 +6,8 @@ from typing import Any
 MAX_SEGMENT_CHARACTERS = 5000
 
 CHAPTER_RE = re.compile(
-    r"(?im)^\\s*((?:chương|chapter|chap\\.?|hồi)\\s+[^\\n]{1,100}|"
-    r"第[0-9０-９零〇○一二两兩三四五六七八九十百千万萬亿億]+[章节回节節集话話篇卷部][^\\n]{0,100})\\s*$"
+    r"(?im)^\s*((?:chương|chapter|chap\.?|hồi)\s+[^\n]{1,100}|"
+    r"第[0-9０-９零〇○一二两兩三四五六七八九十百千万萬亿億]+[章节回节節集话話篇卷部][^\n]{0,100})\s*$"
 )
 
 
@@ -16,7 +16,7 @@ def _split_text(text: str, max_chars: int = MAX_SEGMENT_CHARACTERS) -> list[str]
     if max_chars < 1:
         raise ValueError("max_chars must be a positive integer.")
 
-    text = re.sub(r"\\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
     parts: list[str] = []
     while len(text) > max_chars:
         window = text[:max_chars]
@@ -48,7 +48,7 @@ def split_audio_segments(
     if max_chars < 1:
         raise ValueError("max_chars must be a positive integer.")
 
-    normalized = text.replace("\\r\\n", "\\n").replace("\\r", "\\n").strip()
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n").strip()
     if not normalized:
         return []
 
