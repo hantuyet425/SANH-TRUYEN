@@ -53,7 +53,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(report["reset_count"], 1)
 
     def test_chinese_numeral_conversion(self):
-        normalized, report = renumber_chapters("第十二章\nA\n第一章\nB")
+        normalized, report = renumber_chapters("第十二章\nA\n第一章\nB", start_number=12)
         self.assertIn("第十二章", normalized)
         self.assertIn("第十三章", normalized)
         self.assertEqual(report["chapter_count"], 2)
