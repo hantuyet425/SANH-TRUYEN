@@ -12,6 +12,7 @@ from app.services.browser_service import open_chrome
 from app.services.epub_service import convert_epub_to_txt
 from app.services.hachimi_service import HachimiTranslator
 from app.services.tts_service import split_chapters
+from app.services.chapter_numbering import renumber_chapters, count_chapters
 from app.services.tts_api_client import StoryTTSClient, StoryTTSAPIError, load_audio_api_settings, save_audio_api_settings
 from app.ui.widgets import heading, panel, button, text_box, try_enable_drop, BG, PANEL, COPPER, TEXT, MUTED
 
@@ -132,6 +133,8 @@ class TranslatePage(BasePage):
         nav = tk.Frame(self, bg=BG); nav.pack(fill="x", pady=8)
         self.counter = tk.StringVar(value="Chưa có nội dung")
         tk.Label(nav, textvariable=self.counter, bg=BG, fg=COPPER).pack(side="left")
+        self.numbering_note = tk.StringVar(value="Số chương xuyên suốt toàn bộ RAW")
+        tk.Label(nav, textvariable=self.numbering_note, bg=BG, fg=MUTED).pack(side="left", padx=(12, 0))
         button(nav, "← ĐOẠN TRƯỚC", self.prev_chunk).pack(side="right", padx=5)
         button(nav, "ĐOẠN TIẾP →", self.next_chunk).pack(side="right")
         opts = tk.Frame(self, bg=BG); opts.pack(fill="x")
@@ -142,6 +145,7 @@ class TranslatePage(BasePage):
         self.status = tk.StringVar(value="Sẵn sàng")
         tk.Label(opts, textvariable=self.status, bg=BG, fg=MUTED).pack(side="left", padx=10)
         self.source = None; self.chunks = []; self.translations = []; self.index = 0
+        self.original_raw = ""; self.numbered_raw = ""; self.chapter_report = {}
 
     def drop_raw(self, data):
         paths = parse_drop_files(data)
@@ -153,21 +157,66 @@ class TranslatePage(BasePage):
         if p: self.load_path(Path(p))
 
     def load_path(self, path):
-        try: raw = read_text_file(path)
-        except Exception as exc: messagebox.showerror("Lỗi đọc file", str(exc)); return
-        self.source = path; self.chunks = split_text(raw, 3400)
-        self.translations = [""] * len(self.chunks); self.index = 0
-        self.show_chunk(); self.app.set_status(f"Đã nạp {len(self.chunks)} đoạn")
+        try:
+            raw = read_text_file(path)
+        except Exception as exc:
+            messagebox.showerror("Lỗi đọc file", str(exc))
+            return
+
+        # Keep the user's RAW file untouched. Work on an in-memory copy whose
+        # chapter headings continue globally across volume boundaries.
+        self.original_raw = raw
+        self.numbered_raw, self.chapter_report = renumber_chapters(raw)
+        self.source = path
+        self.chunks = split_text(self.numbered_raw, 3400)
+        self.translations = [""] * len(self.chunks)
+        self.index = 0
+
+        chapter_count = self.chapter_report["chapter_count"]
+        reset_count = self.chapter_report["reset_count"]
+        if chapter_count:
+            self.numbering_note.set(
+                f"{chapter_count} chương · đã nối {reset_count} lần đặt lại số"
+            )
+            status = (
+                f"Đã nạp {len(self.chunks)} đoạn · {chapter_count} chương"
+                + (f" · nối {reset_count} lần reset" if reset_count else " · số chương đã liên tục")
+            )
+        else:
+            self.numbering_note.set("Chưa nhận diện được tiêu đề chương")
+            status = f"Đã nạp {len(self.chunks)} đoạn · giữ nguyên vì không nhận diện được chương"
+
+        self.show_chunk()
+        self.app.set_status(status)
 
     def capture(self):
-        if self.chunks: self.translations[self.index] = self.vi_box.get("1.0", "end-1c").strip()
+        if not self.chunks:
+            return
+
+        current_text = self.vi_box.get("1.0", "end-1c").strip()
+        # Derive the global starting chapter number from the RAW source, not
+        # from completed translations. This also works when earlier chunks
+        # have not been translated yet.
+        preceding_source = "\n\n".join(self.chunks[:self.index])
+        start_number = count_chapters(preceding_source) + 1
+        normalized, _report = renumber_chapters(
+            current_text,
+            start_number=start_number,
+        )
+        self.translations[self.index] = normalized
+
+        if normalized != current_text:
+            self.vi_box.delete("1.0", "end")
+            self.vi_box.insert("1.0", normalized)
 
     def show_chunk(self):
         self.raw_box.delete("1.0", "end"); self.vi_box.delete("1.0", "end")
         if not self.chunks: self.counter.set("Chưa có nội dung"); return
         self.raw_box.insert("1.0", self.chunks[self.index])
         self.vi_box.insert("1.0", self.translations[self.index])
-        self.counter.set(f"ĐOẠN {self.index + 1}/{len(self.chunks)}")
+        chapter_count = count_chapters(self.chunks[self.index])
+        suffix = f" · {chapter_count} tiêu đề chương" if chapter_count else ""
+        self.counter.set(f"ĐOẠN {self.index + 1}/{len(self.chunks)}{suffix}")
 
     def prev_chunk(self):
         if self.index > 0:
@@ -182,6 +231,9 @@ class TranslatePage(BasePage):
         name = self.source.stem if self.source else "Tiểu thuyết"
         return ("Dịch đoạn tiểu thuyết tiếng Trung sau sang tiếng Việt tự nhiên, mạch lạc; "
                 "giữ nguyên tên riêng, thuật ngữ, quan hệ xưng hô; không thêm/bớt tình tiết. "
+                "Giữ nguyên mọi tiêu đề chương và số chương đã được chuẩn hóa xuyên suốt toàn bộ truyện. "
+                "Khi gặp tiêu đề quyển/tập mới, tuyệt đối không đánh số chương quay lại từ 1. "
+                "Không tự ý đổi, xóa, gộp hoặc tạo thêm tiêu đề chương. "
                 "Chỉ trả bản dịch, không giải thích.\n"
                 f"Tên truyện: {name} · Đoạn {self.index + 1}/{len(self.chunks)}\n\n"
                 + self.chunks[self.index])
