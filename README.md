@@ -64,7 +64,7 @@ Nếu Windows SmartScreen hiện cảnh báo với file BAT tự tạo, hãy ch�
 - Mở hoặc kéo TXT tiếng Việt vào khung nội dung.
 - Chọn giọng NamMinh hoặc HoaiMy.
 - Chọn tốc độ 0.75x, 1.0x, 1.25x, 1.5x hoặc 2.0x.
-- Nhấn **Gửi tạo Audio**. SẢNH TRUYỆN gửi mỗi chương (một AU) sang [Story-TTS-API](https://github.com/hantuyet425/Story-TTS-API). Dịch vụ chia AU thành các đoạn tối đa 5.000 ký tự, tổng hợp tối đa 4 đoạn song song, ghép theo đúng thứ tự rồi trả một MP3 hoàn chỉnh về thư mục audio của dự án.
+- Nhấn **Gửi tạo Audio**. SẢNH TRUYỆN gửi mỗi chương (một AU) sang [Story-TTS-API](https://github.com/hantuyet425/Story-TTS-API). Dịch vụ chia AU thành các đoạn tối đa 5.000 ký tự, mặc định tổng hợp tối đa 100 đoạn song song, ghép theo đúng thứ tự rồi trả một MP3 hoàn chỉnh về thư mục audio của dự án.
 - Chọn một AU đã hoàn thành rồi nhấn **Nghe thử / Mở MP3**.
 
 Story-TTS-API dùng Edge TTS, cần Internet; đây không phải TTS offline. Nhận diện chương hiện dựa vào tiêu đề dạng “Chương 1”, “Chapter 1” hoặc một số mẫu tiêu đề tiếng Trung; nếu file không có tiêu đề phù hợp, toàn bộ nội dung được xem là một AU.
@@ -86,7 +86,7 @@ API cấp mã tác vụ, cung cấp tiến độ số đoạn đã hoàn tất v
 
 Nếu triển khai Story-TTS-API trên Render hoặc máy chủ riêng, thay URL localhost bằng URL máy chủ và dùng API key do máy chủ cấp. Không commit API key vào GitHub, không đưa key vào README hoặc ảnh chụp công khai.
 
-Mặc định API chia AU thành đoạn tối đa 5.000 ký tự và xử lý tối đa 4 đoạn đồng thời. Nếu dịch vụ Edge trả lỗi 403/429, giảm `MAX_PARALLEL_CHUNKS` trong cấu hình API xuống 2 hoặc 1.
+Mặc định API chia AU thành đoạn tối đa 5.000 ký tự và xử lý tối đa 100 đoạn đồng thời. Mức này khá cao: nếu Edge TTS trả lỗi 403/429, giảm `MAX_PARALLEL_CHUNKS` trong file `.env` của Story-TTS-API xuống 20, 10, 4, 2 hoặc 1 rồi khởi động lại API.
 
 ## Thư mục dữ liệu
 
