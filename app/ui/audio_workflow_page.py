@@ -1,0 +1,574 @@
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import threading
+import time
+import uuid
+from datetime import datetime
+from pathlib import Path
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
+
+from app.config import PROJECTS_DIR, project_dir_for
+from app.services.audio_github_client import (
+    AudioGitHubClient,
+    ensure_audio_credentials,
+)
+from app.services.audio_segments import MAX_SEGMENT_CHARACTERS, split_audio_segments
+from app.ui.pages import BasePage
+from app.ui.widgets import (
+    BG, COPPER, INPUT, LINE, MUTED, PANEL, RED, TEXT,
+    button, eyebrow, field_label, heading, panel, text_box, try_enable_drop,
+)
+from app.utils import parse_drop_files, read_text_file
+
+
+class AudioPage(BasePage):
+    """Two-pane audiobook workspace with persistent history and elapsed-job timer."""
+
+    def __init__(self, parent, app):
+        super().__init__(parent, app)
+        eyebrow(self, "03 / AUDIO").pack(anchor="w", pady=(0, 6))
+        heading(self, "Tạo Audio", "Tạo một audiobook MP3 hoàn chỉnh từ bản dịch đã lưu.")
+
+        file_bar = tk.Frame(self, bg=BG)
+        file_bar.pack(fill="x", pady=(0, 9))
+        self.open_button = button(file_bar, "MỞ FILE TXT ĐÃ DỊCH", self.load_file, accent=True)
+        self.open_button.pack(side="left", padx=(0, 10))
+        self.file_label = tk.StringVar(value="Chưa chọn nội dung")
+        tk.Label(file_bar, textvariable=self.file_label, bg=BG, fg=MUTED,
+                 font=("Segoe UI", 8)).pack(side="left")
+
+        columns = tk.Frame(self, bg=BG)
+        columns.pack(fill="both", expand=True)
+        columns.grid_columnconfigure(0, weight=6, uniform="audio")
+        columns.grid_columnconfigure(1, weight=4, uniform="audio")
+        columns.grid_rowconfigure(0, weight=1)
+
+        left = panel(columns)
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        # Grid keeps the content editor flexible while permanently reserving
+        # visible rows for voice, speed and the Create Audio action.
+        # A compact editor height is intentional; it expands with the window.
+        left.grid_columnconfigure(0, weight=1)
+        left.grid_rowconfigure(1, weight=3)
+        left.grid_rowconfigure(3, weight=2)
+        tk.Label(left, text="NỘI DUNG TẠO", bg=PANEL, fg=TEXT,
+                 font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 7))
+        self.content_frame, self.content = text_box(left, 6)
+        self.content_frame.grid(row=1, column=0, sticky="nsew")
+        try_enable_drop(self.content, self.drop_audio)
+
+        segment_header = tk.Frame(left, bg=PANEL)
+        segment_header.grid(row=2, column=0, sticky="ew", pady=(9, 5))
+        tk.Label(segment_header, text="DANH SÁCH ĐOẠN ĐÃ CHIA", bg=PANEL, fg=TEXT,
+                 font=("Segoe UI", 9, "bold")).pack(side="left")
+        self.segment_count_var = tk.StringVar(
+            value=f"0 đoạn · tối đa {MAX_SEGMENT_CHARACTERS:,} ký tự/đoạn · 4 đồng thời"
+        )
+        tk.Label(segment_header, textvariable=self.segment_count_var, bg=PANEL, fg=COPPER,
+                 font=("Segoe UI", 8)).pack(side="right")
+
+        segment_frame = tk.Frame(left, bg=INPUT, highlightthickness=1, highlightbackground=LINE)
+        segment_frame.grid(row=3, column=0, sticky="nsew")
+        self.segment_list = tk.Listbox(
+            segment_frame, bg=INPUT, fg=TEXT, selectbackground="#5B1A25",
+            relief="flat", bd=0, font=("Consolas", 8), activestyle="none",
+            selectmode="browse", height=5,
+        )
+        segment_scroll = ttk.Scrollbar(
+            segment_frame, orient="vertical", command=self.segment_list.yview
+        )
+        self.segment_list.configure(yscrollcommand=segment_scroll.set)
+        self.segment_list.pack(side="left", fill="both", expand=True, padx=5, pady=4)
+        segment_scroll.pack(side="right", fill="y", pady=4)
+        self.segment_list.bind("<<ListboxSelect>>", self.on_segment_select)
+        self.segment_detail_var = tk.StringVar(value="Nạp TXT hoặc nhập nội dung để xem danh sách đoạn.")
+        tk.Label(
+            left, textvariable=self.segment_detail_var, bg=PANEL, fg=MUTED,
+            font=("Segoe UI", 8), justify="left", anchor="w", wraplength=560,
+        ).grid(row=4, column=0, sticky="ew", pady=(5, 0))
+
+        controls = tk.Frame(left, bg="#1D1412", padx=10, pady=9,
+                            highlightthickness=1, highlightbackground=LINE)
+        controls.grid(row=5, column=0, sticky="ew", pady=(8, 0))
+        field_label(controls, "Giọng đọc", bg="#1D1412").pack(side="left")
+        self.voice = tk.StringVar(value="Nam Minh")
+        self.voice_combo = ttk.Combobox(
+            controls, textvariable=self.voice,
+            values=["Hoài My", "Nam Minh"], state="readonly", width=13,
+        )
+        self.voice_combo.pack(side="left", padx=(7, 14))
+        field_label(controls, "Tốc độ", bg="#1D1412").pack(side="left")
+        self.rate = tk.StringVar(value="1.25")
+        self.rate_combo = ttk.Combobox(
+            controls, textvariable=self.rate,
+            values=["1", "1.25", "1.5", "1.75", "2"],
+            state="readonly", width=7,
+        )
+        self.rate_combo.pack(side="left", padx=7)
+
+        self.start_button = button(left, "TẠO AUDIO", self.start_audio, accent=True)
+        self.start_button.grid(row=6, column=0, sticky="e", pady=(8, 0))
+
+        right = panel(columns)
+        right.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        # The history list may shrink; timer and two required file actions may not.
+        right.grid_columnconfigure(0, weight=1)
+        right.grid_rowconfigure(1, weight=1)
+        tk.Label(right, text="LỊCH SỬ TẠO", bg=PANEL, fg=TEXT,
+                 font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 7))
+        list_frame = tk.Frame(right, bg=INPUT, highlightthickness=1, highlightbackground=LINE)
+        list_frame.grid(row=1, column=0, sticky="nsew")
+        self.history = tk.Listbox(
+            list_frame, bg=INPUT, fg=TEXT, selectbackground="#5B1A25",
+            relief="flat", bd=0, font=("Segoe UI", 9), activestyle="none",
+            selectmode="browse", height=5,
+        )
+        scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self.history.yview)
+        self.history.configure(yscrollcommand=scroll.set)
+        self.history.pack(side="left", fill="both", expand=True, padx=5, pady=5)
+        scroll.pack(side="right", fill="y", pady=5)
+        self.history.bind("<<ListboxSelect>>", self.on_history_select)
+
+        timer_panel = tk.Frame(right, bg="#1D1412", padx=12, pady=8,
+                               highlightthickness=1, highlightbackground=LINE)
+        timer_panel.grid(row=2, column=0, sticky="ew", pady=(9, 7))
+        tk.Label(timer_panel, text="THỜI GIAN TẠO", bg="#1D1412", fg=COPPER,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        self.timer_value = tk.StringVar(value="00:00:00")
+        tk.Label(timer_panel, textvariable=self.timer_value, bg="#1D1412", fg=TEXT,
+                 font=("Segoe UI", 19, "bold")).pack(anchor="w", pady=(2, 0))
+        self.job_status = tk.StringVar(value="Chưa có tác vụ")
+        tk.Label(right, textvariable=self.job_status, bg=PANEL, fg=MUTED,
+                 font=("Segoe UI", 8), wraplength=300, justify="left").grid(row=3, column=0, sticky="w", pady=(0, 7))
+
+        result_buttons = tk.Frame(right, bg=PANEL)
+        result_buttons.grid(row=4, column=0, sticky="ew")
+        self.listen_button = button(result_buttons, "NGHE AUDIO", self.listen_selected, accent=True)
+        self.listen_button.pack(side="left", padx=(0, 7))
+        self.open_file_button = button(result_buttons, "MỞ FILE", self.open_selected_file)
+        self.open_file_button.pack(side="left")
+        self.listen_button.configure(state="disabled")
+        self.open_file_button.configure(state="disabled")
+
+        self.source: Path | None = None
+        self.audio_segments: list[dict] = []
+        self._segment_state = "ready"
+        self._segment_preview_after_id = None
+        self.content.bind("<<Modified>>", self._on_content_modified)
+        self.content.edit_modified(False)
+        self.audio_dir: Path | None = None
+        self.history_path: Path | None = None
+        self.history_records: list[dict] = []
+        self.busy = False
+        self._started_monotonic: float | None = None
+        self._timer_after_id = None
+        self._active_record_id: str | None = None
+        self._selected_record: dict | None = None
+
+    def _on_content_modified(self, _event=None):
+        try:
+            if not self.content.edit_modified():
+                return
+            self.content.edit_modified(False)
+        except tk.TclError:
+            return
+        if self._segment_preview_after_id is not None:
+            try:
+                self.after_cancel(self._segment_preview_after_id)
+            except tk.TclError:
+                pass
+        self._segment_preview_after_id = self.after(250, self._refresh_segments_from_editor)
+
+    def _refresh_segments_from_editor(self):
+        self._segment_preview_after_id = None
+        text = self.content.get("1.0", "end-1c")
+        self._set_segment_preview(text, state="ready")
+
+    def _set_segment_preview(self, text: str, state: str = "ready"):
+        self.audio_segments = split_audio_segments(text)
+        self._segment_state = state
+        count = len(self.audio_segments)
+        self.segment_count_var.set(
+            f"{count:,} đoạn · tối đa {MAX_SEGMENT_CHARACTERS:,} ký tự/đoạn · 4 đồng thời"
+        )
+        self._render_segment_list()
+
+    def _render_segment_list(self):
+        selected = self.segment_list.curselection()
+        selected_index = selected[0] if selected else 0
+        self.segment_list.delete(0, "end")
+        state_labels = {
+            "ready": "Sẵn sàng",
+            "submitted": "Đã gửi",
+            "completed": "Hoàn tất",
+            "failed": "Chưa hoàn tất",
+        }
+        state_label = state_labels.get(self._segment_state, "Sẵn sàng")
+        for item in self.audio_segments:
+            excerpt = " ".join(str(item["text"]).split())
+            if len(excerpt) > 48:
+                excerpt = excerpt[:45].rstrip() + "..."
+            chapter = str(item["chapter"])
+            if len(chapter) > 20:
+                chapter = chapter[:17].rstrip() + "..."
+            self.segment_list.insert(
+                "end",
+                f'{state_label:<12} {int(item["index"]):03d} | {chapter} | '
+                f'{int(item["characters"]):,} ký tự | {excerpt}',
+            )
+        if self.audio_segments:
+            selected_index = min(selected_index, len(self.audio_segments) - 1)
+            self.segment_list.selection_set(selected_index)
+            self.segment_list.activate(selected_index)
+            self.on_segment_select()
+        else:
+            self.segment_detail_var.set("Nạp TXT hoặc nhập nội dung để xem danh sách đoạn.")
+
+    def on_segment_select(self, _event=None):
+        selection = self.segment_list.curselection()
+        if not selection:
+            return
+        index = selection[0]
+        if index >= len(self.audio_segments):
+            return
+        item = self.audio_segments[index]
+        excerpt = " ".join(str(item["text"]).split())
+        if len(excerpt) > 260:
+            excerpt = excerpt[:257].rstrip() + "..."
+        self.segment_detail_var.set(
+            f'ĐOẠN {int(item["index"]):03d} · {item["chapter"]} · '
+            f'{int(item["characters"]):,} ký tự\n{excerpt}'
+        )
+
+    def _set_segment_state(self, state: str):
+        self._segment_state = state
+        self._render_segment_list()
+
+    def load_file(self):
+        selected = filedialog.askopenfilename(
+            filetypes=[("Bản dịch TXT", "*.txt"), ("Tất cả tệp", "*.*")]
+        )
+        if selected:
+            self.load_path(Path(selected))
+
+    def drop_audio(self, data):
+        paths = parse_drop_files(data)
+        if paths:
+            path = Path(paths[0].strip("{}"))
+            if path.suffix.lower() == ".txt":
+                self.load_path(path)
+
+    def load_path(self, path: Path):
+        path = Path(path)
+        try:
+            content = read_text_file(path)
+        except Exception as exc:
+            messagebox.showerror("Không đọc được TXT", str(exc))
+            return
+        if not content.strip():
+            messagebox.showwarning("File trống", "TXT không có nội dung.")
+            return
+        self.source = path
+        self.content.delete("1.0", "end")
+        self.content.insert("1.0", content)
+        self.content.edit_modified(False)
+        self._set_segment_preview(content, state="ready")
+        self.audio_dir = project_dir_for(path) / "audio"
+        self.audio_dir.mkdir(parents=True, exist_ok=True)
+        self.history_path = self.audio_dir / "audio_history.json"
+        self.file_label.set(path.name)
+        self.job_status.set("Đã nạp nội dung · sẵn sàng tạo audio")
+        self._refresh_history()
+        self.app.set_status(f"Đã nạp bản dịch {path.name}.")
+
+    def _load_history_records(self) -> list[dict]:
+        if not self.history_path or not self.history_path.is_file():
+            return []
+        try:
+            payload = json.loads(self.history_path.read_text(encoding="utf-8"))
+            records = payload.get("items", [])
+            return records if isinstance(records, list) else []
+        except (OSError, ValueError, TypeError):
+            return []
+
+    def _save_history_records(self):
+        if not self.history_path:
+            return
+        self.history_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.history_path.with_suffix(".tmp")
+        temporary.write_text(
+            json.dumps({"version": 1, "items": self.history_records},
+                       ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        temporary.replace(self.history_path)
+
+    def _refresh_history(self):
+        self.history.delete(0, "end")
+        self.history_records = self._load_history_records()
+        interrupted = False
+        # Only mark stale "running" entries as interrupted when the page is
+        # restored while no job is active in this application instance.
+        if not self.busy:
+            for record in self.history_records:
+                if record.get("status") == "running":
+                    record["status"] = "failed"
+                    record["error"] = "Ứng dụng đã đóng trước khi nhận kết quả từ GitHub Actions."
+                    interrupted = True
+        if interrupted:
+            self._save_history_records()
+        known_paths = {
+            str(Path(item.get("file_path", "")).resolve())
+            for item in self.history_records if item.get("file_path")
+        }
+        if self.audio_dir and self.audio_dir.exists():
+            for path in self.audio_dir.rglob("audiobook.mp3"):
+                key = str(path.resolve())
+                if key not in known_paths:
+                    self.history_records.append({
+                        "id": uuid.uuid4().hex,
+                        "file_path": str(path),
+                        "created_at": datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="seconds"),
+                        "voice": "Không rõ",
+                        "rate": None,
+                        "elapsed_seconds": None,
+                        "status": "completed",
+                    })
+                    known_paths.add(key)
+            self.history_records.sort(
+                key=lambda item: str(item.get("created_at", "")), reverse=True
+            )
+            self._save_history_records()
+
+        for item in self.history_records:
+            created = str(item.get("created_at", ""))[:16].replace("T", " ")
+            voice = item.get("voice") or "Không rõ"
+            rate = item.get("rate")
+            rate_label = f"{rate}x" if rate is not None else ""
+            status = item.get("status", "completed")
+            if status == "completed":
+                name = Path(item.get("file_path", "audiobook.mp3")).name
+                label = f"✓ {created} · {voice} {rate_label} · {name}"
+            elif status == "running":
+                label = f"◌ {created} · {voice} {rate_label} · Đang tạo"
+            else:
+                label = f"× {created} · {voice} {rate_label} · Thất bại"
+            self.history.insert("end", label)
+
+        self._selected_record = None
+        if self.history_records:
+            self.history.selection_set(0)
+            self.history.activate(0)
+            self._selected_record = self.history_records[0]
+        self._update_history_buttons()
+
+    def on_history_select(self, _event=None):
+        selection = self.history.curselection()
+        self._selected_record = (
+            self.history_records[selection[0]]
+            if selection and selection[0] < len(self.history_records)
+            else None
+        )
+        self._update_history_buttons()
+
+    def _update_history_buttons(self):
+        record = self._selected_record or {}
+        path = Path(record.get("file_path", "")) if record.get("file_path") else None
+        ready = bool(
+            record.get("status") == "completed"
+            and path and path.is_file()
+        )
+        state = "normal" if ready else "disabled"
+        self.listen_button.configure(state=state)
+        self.open_file_button.configure(state=state)
+
+    def listen_selected(self):
+        record = self._selected_record or {}
+        path = Path(record.get("file_path", "")) if record.get("file_path") else None
+        if not path or not path.is_file():
+            messagebox.showinfo("Chưa có audiobook", "Hãy chọn một tác vụ đã hoàn thành.")
+            return
+        try:
+            if os.name == "nt":
+                os.startfile(str(path))
+            else:
+                import webbrowser
+                webbrowser.open(path.as_uri())
+        except Exception as exc:
+            messagebox.showerror("Không mở được audio", str(exc))
+
+    def open_selected_file(self):
+        record = self._selected_record or {}
+        path = Path(record.get("file_path", "")) if record.get("file_path") else None
+        if not path or not path.is_file():
+            messagebox.showinfo("Chưa có file", "Hãy chọn một audiobook đã hoàn thành.")
+            return
+        try:
+            if os.name == "nt":
+                subprocess.Popen(["explorer", f"/select,{path}"])
+            else:
+                import webbrowser
+                webbrowser.open(path.parent.as_uri())
+        except Exception as exc:
+            messagebox.showerror("Không mở được vị trí file", str(exc))
+
+    def _format_elapsed(self, seconds: float) -> str:
+        total = max(0, int(seconds))
+        hours, remainder = divmod(total, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+    def _start_timer(self):
+        self._started_monotonic = time.monotonic()
+        self.timer_value.set("00:00:00")
+        self._tick_timer()
+
+    def _tick_timer(self):
+        if self._started_monotonic is None:
+            return
+        elapsed = time.monotonic() - self._started_monotonic
+        self.timer_value.set(self._format_elapsed(elapsed))
+        self._timer_after_id = self.after(1000, self._tick_timer)
+
+    def _stop_timer(self) -> float:
+        elapsed = 0.0
+        if self._started_monotonic is not None:
+            elapsed = time.monotonic() - self._started_monotonic
+        self._started_monotonic = None
+        if self._timer_after_id is not None:
+            try:
+                self.after_cancel(self._timer_after_id)
+            except tk.TclError:
+                pass
+            self._timer_after_id = None
+        self.timer_value.set(self._format_elapsed(elapsed))
+        return elapsed
+
+    def _update_record(self, **values):
+        if not self._active_record_id:
+            return
+        for record in self.history_records:
+            if record.get("id") == self._active_record_id:
+                record.update(values)
+                break
+        self._save_history_records()
+        self._refresh_history()
+
+    def start_audio(self):
+        if self.busy:
+            return
+        if self.source is None and not self.content.get("1.0", "end-1c").strip():
+            messagebox.showinfo("Chưa có nội dung", "Hãy mở file TXT đã dịch hoặc dán nội dung trước.")
+            return
+        source_text = self.content.get("1.0", "end-1c").strip()
+        if not source_text:
+            messagebox.showinfo("Nội dung trống", "Không có văn bản để tạo audio.")
+            return
+        if self.audio_dir is None:
+            self.audio_dir = PROJECTS_DIR / "Audio-moi" / "audio"
+            self.audio_dir.mkdir(parents=True, exist_ok=True)
+            self.history_path = self.audio_dir / "audio_history.json"
+            self._refresh_history()
+
+        self._set_segment_preview(source_text, state="submitted")
+        voice = self.voice.get().strip()
+        rate = float(self.rate.get())
+        record_id = uuid.uuid4().hex
+        created_at = datetime.now().isoformat(timespec="seconds")
+        record = {
+            "id": record_id,
+            "file_path": "",
+            "created_at": created_at,
+            "voice": voice,
+            "rate": rate,
+            "elapsed_seconds": None,
+            "status": "running",
+            "error": "",
+            "source_file": str(self.source) if self.source else "",
+        }
+        self.history_records.insert(0, record)
+        self._active_record_id = record_id
+        self.busy = True
+        self._save_history_records()
+        self._refresh_history()
+        self.start_button.configure(state="disabled")
+        self.open_button.configure(state="disabled")
+        self.voice_combo.configure(state="disabled")
+        self.rate_combo.configure(state="disabled")
+        self.content.configure(state="disabled")
+        self.job_status.set("Đang gửi và tạo audiobook trên GitHub Actions...")
+        self.app.set_status("Đang tạo audiobook. Đồng hồ đã bắt đầu.")
+        self._start_timer()
+
+        audio_dir = self.audio_dir
+
+        def report(status: str):
+            try:
+                self.after(0, lambda value=status: self.job_status.set(value))
+            except tk.TclError:
+                pass
+
+        def work():
+            try:
+                report("Đang dùng phiên GitHub đã đăng nhập và kiểm tra cấu hình audio...")
+                token, shared_key = ensure_audio_credentials()
+                client = AudioGitHubClient(token, shared_key)
+                outputs = client.generate_audio(
+                    source_text, voice, rate, audio_dir, progress=report
+                )
+                output_path = outputs[0] if outputs else None
+                self.after(0, lambda path=output_path: self._audio_done(path))
+            except Exception as exc:
+                self.after(0, lambda error=str(exc): self._audio_failed(error))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _finish_job_controls(self):
+        self.busy = False
+        self.start_button.configure(state="normal")
+        self.open_button.configure(state="normal")
+        self.voice_combo.configure(state="readonly")
+        self.rate_combo.configure(state="readonly")
+        self.content.configure(state="normal")
+
+    def _audio_done(self, output_path: Path | None):
+        if output_path is None or not Path(output_path).is_file():
+            self._audio_failed("Worker không trả về audiobook.mp3 hợp lệ.")
+            return
+        elapsed = self._stop_timer()
+        self._finish_job_controls()
+        self._set_segment_state("completed")
+        self._update_record(
+            file_path=str(output_path),
+            elapsed_seconds=round(elapsed, 2),
+            status="completed",
+            error="",
+        )
+        self.job_status.set(f"Hoàn tất · {Path(output_path).name}")
+        self.app.set_status("Đã tạo xong audiobook.mp3.")
+        self._active_record_id = None
+        self._refresh_history()
+        messagebox.showinfo(
+            "Tạo audio hoàn tất",
+            f"Đã tạo audiobook.mp3.\n\nLưu tại:\n{output_path}\n\n"
+            f"Thời gian: {self._format_elapsed(elapsed)}",
+        )
+
+    def _audio_failed(self, error: str):
+        elapsed = self._stop_timer()
+        self._finish_job_controls()
+        self._set_segment_state("failed")
+        self._update_record(
+            elapsed_seconds=round(elapsed, 2),
+            status="failed",
+            error=error,
+        )
+        self.job_status.set("Tạo audio thất bại · " + error)
+        self.app.set_status("Tác vụ audio thất bại.")
+        self._active_record_id = None
+        self._refresh_history()
+        messagebox.showerror("Không tạo được audio", error)
