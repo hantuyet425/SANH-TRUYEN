@@ -208,36 +208,124 @@ class CrawlPage(BasePage):
 class TranslatePage(BasePage):
     def __init__(self, parent, app):
         super().__init__(parent, app)
-        heading(self, "Dịch truyện", "Hai khung RAW / BẢN DỊCH · ChatGPT clipboard hoặc HachimiMT cục bộ")
-        bar = tk.Frame(self, bg=BG); bar.pack(fill="x", pady=(0, 10))
-        button(bar, "MỞ FILE RAW", self.load_file, accent=True).pack(side="left")
-        button(bar, "MỞ CHATGPT", lambda: webbrowser.open("https://chatgpt.com/")).pack(side="left", padx=6)
-        button(bar, "SAO CHÉP PROMPT", self.copy_prompt).pack(side="left")
-        button(bar, "NHẬN CLIPBOARD", self.paste_clipboard).pack(side="left", padx=6)
-        button(bar, "LƯU BẢN DỊCH", self.save_translation).pack(side="left")
-        panes = tk.Frame(self, bg=BG); panes.pack(fill="both", expand=True)
-        panes.grid_columnconfigure(0, weight=1); panes.grid_columnconfigure(1, weight=1); panes.grid_rowconfigure(0, weight=1)
-        left = panel(panes, "Bản RAW"); left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
-        right = panel(panes, "Bản dịch"); right.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
-        self.raw_frame, self.raw_box = text_box(left, 18); self.raw_frame.pack(fill="both", expand=True)
-        self.vi_frame, self.vi_box = text_box(right, 18); self.vi_frame.pack(fill="both", expand=True)
+        eyebrow(self, "02 / Translate").pack(anchor="w", pady=(0, 8))
+        heading(self, "Phòng biên dịch", "Dịch raw tiếng Trung hoặc viết lại bản convert, giữ nguyên quy trình xử lý hiện có.")
+
+        bar = tk.Frame(self, bg=BG)
+        bar.pack(fill="x", pady=(0, 9))
+        button(bar, "NẠP FILE RAW TXT", self.load_file, accent=True).pack(side="left", padx=(0, 7))
+        button(bar, "MỞ BẢN DỊCH ĐÃ LƯU", self.open_saved).pack(side="left", padx=(0, 7))
+        button(bar, "KẾT NỐI CHATGPT", self.connect_chatgpt).pack(side="left", padx=(0, 7))
+        button(bar, "NGẮT KẾT NỐI", self.disconnect_chatgpt).pack(side="left")
+
+        meta = tk.Frame(self, bg=PANEL, padx=11, pady=8, highlightthickness=1, highlightbackground=LINE)
+        meta.pack(fill="x", pady=(0, 7))
+        field_label(meta, "Từ điển").pack(side="left")
+        self.dictionary = tk.StringVar(value="Mặc định")
+        ttk.Combobox(meta, textvariable=self.dictionary, values=["Mặc định"], state="readonly", width=17).pack(side="left", padx=(7, 16))
+        field_label(meta, "Tên truyện").pack(side="left")
+        self.story_name = tk.StringVar(value="Chưa nạp truyện")
+        ttk.Entry(meta, textvariable=self.story_name, width=32).pack(side="left", padx=7)
+        self.saved_note = tk.Label(meta, text="Bản nháp tự lưu trên máy", bg=PANEL, fg=MUTED, font=("Segoe UI", 8))
+        self.saved_note.pack(side="right")
+
+        engine = tk.Frame(self, bg=PANEL, padx=11, pady=8, highlightthickness=1, highlightbackground=LINE)
+        engine.pack(fill="x", pady=(0, 8))
+        field_label(engine, "Bộ máy dịch").pack(side="left")
+        self.engine_choice = tk.StringVar(value="ChatGPT · Qua clipboard")
+        ttk.Combobox(
+            engine, textvariable=self.engine_choice,
+            values=["ChatGPT · Qua clipboard", "HachimiMT-60 · Cục bộ"],
+            state="readonly", width=25
+        ).pack(side="left", padx=(8, 10))
+        tk.Label(engine, text="Hachimi chạy CPU cục bộ · ChatGPT thao tác qua clipboard.",
+                 bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(side="left")
+        self.mode_row = tk.Frame(self, bg=BG)
+        self.mode_row.pack(fill="x", pady=(0, 8))
+        field_label(self.mode_row, "Chế độ").pack(side="left", padx=(0, 10))
+        self.translation_mode = tk.StringVar(value="raw")
+        tk.Radiobutton(
+            self.mode_row, text="Dịch raw Trung", variable=self.translation_mode, value="raw",
+            bg=BG, fg=TEXT, selectcolor=PANEL_2, activebackground=BG, activeforeground=TEXT,
+            font=("Segoe UI", 9)
+        ).pack(side="left", padx=(0, 12))
+        tk.Radiobutton(
+            self.mode_row, text="Viết lại convert", variable=self.translation_mode, value="convert",
+            bg=BG, fg=TEXT, selectcolor=PANEL_2, activebackground=BG, activeforeground=TEXT,
+            font=("Segoe UI", 9)
+        ).pack(side="left")
+
+        panes = tk.Frame(self, bg=BG)
+        panes.pack(fill="both", expand=True)
+        panes.grid_columnconfigure(0, weight=1)
+        panes.grid_columnconfigure(1, weight=1)
+        panes.grid_rowconfigure(0, weight=1)
+        left = panel(panes)
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        tk.Label(left, text="01 / VĂN BẢN NGUỒN", bg=PANEL, fg=COPPER, font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 7))
+        self.raw_frame, self.raw_box = text_box(left, 18)
+        self.raw_frame.pack(fill="both", expand=True)
+        right = panel(panes)
+        right.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        tk.Label(right, text="02 / BẢN DỊCH TIẾNG VIỆT", bg=PANEL, fg=COPPER, font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 4))
+        tk.Label(right, text="Kết quả sẽ xuất hiện ở đây; có thể chỉnh sửa trước khi lưu.",
+                 bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(anchor="w", pady=(0, 7))
+        self.vi_frame, self.vi_box = text_box(right, 18)
+        self.vi_frame.pack(fill="both", expand=True)
         try_enable_drop(self.raw_box, self.drop_raw)
-        nav = tk.Frame(self, bg=BG); nav.pack(fill="x", pady=8)
+
+        footer = tk.Frame(self, bg=BG)
+        footer.pack(fill="x", pady=(8, 0))
         self.counter = tk.StringVar(value="Chưa có nội dung")
-        tk.Label(nav, textvariable=self.counter, bg=BG, fg=COPPER).pack(side="left")
+        tk.Label(footer, textvariable=self.counter, bg=BG, fg=COPPER, font=("Segoe UI", 8)).pack(side="left")
         self.numbering_note = tk.StringVar(value="Số chương xuyên suốt toàn bộ RAW")
-        tk.Label(nav, textvariable=self.numbering_note, bg=BG, fg=MUTED).pack(side="left", padx=(12, 0))
-        button(nav, "← ĐOẠN TRƯỚC", self.prev_chunk).pack(side="right", padx=5)
-        button(nav, "ĐOẠN TIẾP →", self.next_chunk).pack(side="right")
-        opts = tk.Frame(self, bg=BG); opts.pack(fill="x")
-        tk.Label(opts, text="Mô hình:", bg=BG, fg=MUTED).pack(side="left")
-        self.model = tk.StringVar(value=list(HACHIMI_MODELS)[0])
-        ttk.Combobox(opts, textvariable=self.model, values=list(HACHIMI_MODELS), state="readonly", width=28).pack(side="left", padx=6)
-        button(opts, "DỊCH ĐOẠN HIỆN TẠI BẰNG HACHIMI", self.translate_local, accent=True).pack(side="left")
+        tk.Label(footer, textvariable=self.numbering_note, bg=BG, fg=MUTED, font=("Segoe UI", 8)).pack(side="left", padx=(10, 0))
         self.status = tk.StringVar(value="Sẵn sàng")
-        tk.Label(opts, textvariable=self.status, bg=BG, fg=MUTED).pack(side="left", padx=10)
-        self.source = None; self.chunks = []; self.translations = []; self.index = 0
-        self.original_raw = ""; self.numbered_raw = ""; self.chapter_report = {}
+        tk.Label(footer, textvariable=self.status, bg=BG, fg=MUTED, font=("Segoe UI", 8)).pack(side="left", padx=(12, 0))
+        button(footer, "LƯU BẢN DỊCH", self.save_translation).pack(side="right", padx=(7, 0))
+        button(footer, "BẮT ĐẦU DỊCH", self.run_selected_engine, accent=True).pack(side="right", padx=(7, 0))
+        button(footer, "ĐOẠN TIẾP →", self.next_chunk).pack(side="right", padx=(7, 0))
+        button(footer, "← ĐOẠN TRƯỚC", self.prev_chunk).pack(side="right")
+
+        self.model = tk.StringVar(value=list(HACHIMI_MODELS)[0])
+        self.source = None
+        self.chunks = []
+        self.translations = []
+        self.index = 0
+        self.original_raw = ""
+        self.numbered_raw = ""
+        self.chapter_report = {}
+        self.chatgpt_connected = False
+
+    def open_saved(self):
+        p = filedialog.askopenfilename(
+            filetypes=[("Bản dịch", "*.txt"), ("Tất cả tệp", "*.*")],
+            initialdir=str(PROJECTS_DIR)
+        )
+        if not p:
+            return
+        try:
+            text = read_text_file(p)
+            self.vi_box.delete("1.0", "end")
+            self.vi_box.insert("1.0", text)
+            self.status.set("Đã mở bản dịch đã lưu.")
+        except Exception as exc:
+            messagebox.showerror("Lỗi mở bản dịch", str(exc))
+
+    def connect_chatgpt(self):
+        self.chatgpt_connected = True
+        webbrowser.open("https://chatgpt.com/")
+        self.status.set("Đã mở ChatGPT. Sao chép prompt, gửi thủ công rồi nhận phản hồi qua clipboard.")
+
+    def disconnect_chatgpt(self):
+        self.chatgpt_connected = False
+        self.status.set("Đã ngắt trạng thái kết nối ChatGPT.")
+
+    def run_selected_engine(self):
+        if self.engine_choice.get().startswith("Hachimi"):
+            self.translate_local()
+        else:
+            self.copy_prompt()
 
     def drop_raw(self, data):
         paths = parse_drop_files(data)
