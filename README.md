@@ -97,6 +97,7 @@ Dữ liệu phát sinh được giữ trong `data\`:
 - `projects\`: RAW, bản dịch và MP3 theo dự án.
 - `models\`: bộ nhớ đệm mô hình Hachimi.
 - `logs\`, `temp\`: log và file tạm.
+- `settings.json`: URL/API key của Story-TTS-API, chỉ lưu cục bộ và được `.gitignore` loại khỏi Git.
 
 Các thư mục dữ liệu cá nhân đã được loại khỏi Git bằng `.gitignore`. Không đẩy truyện có bản quyền, bản dịch cá nhân, cookie trình duyệt, mật khẩu, token hoặc API key lên repository công khai.
 
