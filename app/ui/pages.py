@@ -1,5 +1,7 @@
 from pathlib import Path
 import os
+import asyncio
+import tempfile
 import queue
 import threading
 import tkinter as tk
@@ -258,6 +260,16 @@ class TranslatePage(BasePage):
             font=("Segoe UI", 9)
         ).pack(side="left")
 
+        # Primary translation actions stay above the editor panes, not below
+        # a tall text area that may push them off-screen on smaller displays.
+        actionbar = tk.Frame(self, bg=BG)
+        actionbar.pack(fill="x", pady=(0, 8))
+        button(actionbar, "BẮT ĐẦU DỊCH", self.run_selected_engine, accent=True).pack(side="left", padx=(0, 7))
+        button(actionbar, "NHẬN CLIPBOARD", self.paste_clipboard).pack(side="left", padx=(0, 7))
+        button(actionbar, "LƯU BẢN DỊCH", self.save_translation).pack(side="left", padx=(0, 7))
+        button(actionbar, "← ĐOẠN TRƯỚC", self.prev_chunk).pack(side="left", padx=(0, 7))
+        button(actionbar, "ĐOẠN TIẾP →", self.next_chunk).pack(side="left")
+
         panes = tk.Frame(self, bg=BG)
         panes.pack(fill="both", expand=True)
         panes.grid_columnconfigure(0, weight=1)
@@ -285,11 +297,6 @@ class TranslatePage(BasePage):
         tk.Label(footer, textvariable=self.numbering_note, bg=BG, fg=MUTED, font=("Segoe UI", 8)).pack(side="left", padx=(10, 0))
         self.status = tk.StringVar(value="Sẵn sàng")
         tk.Label(footer, textvariable=self.status, bg=BG, fg=MUTED, font=("Segoe UI", 8)).pack(side="left", padx=(12, 0))
-        button(footer, "LƯU BẢN DỊCH", self.save_translation).pack(side="right", padx=(7, 0))
-        button(footer, "NHẬN CLIPBOARD", self.paste_clipboard).pack(side="right", padx=(7, 0))
-        button(footer, "BẮT ĐẦU DỊCH", self.run_selected_engine, accent=True).pack(side="right", padx=(7, 0))
-        button(footer, "ĐOẠN TIẾP →", self.next_chunk).pack(side="right", padx=(7, 0))
-        button(footer, "← ĐOẠN TRƯỚC", self.prev_chunk).pack(side="right")
 
         self.source = None
         self.chunks = []
@@ -653,27 +660,38 @@ class AudioPage(BasePage):
         button(file_row, "MỞ FILE TXT", self.load_file, accent=True).pack(side="left")
         self.file_label = tk.Label(file_row, text="Chưa chọn file", bg=PANEL, fg=MUTED, font=("Segoe UI", 8))
         self.file_label.pack(side="left", padx=12)
+        # Voice, rate and primary actions are fixed above the text area so
+        # they are visible without scrolling on 1366x768 / compact screens.
+        controls = tk.Frame(left, bg="#1D1412", padx=10, pady=8, highlightthickness=1, highlightbackground=LINE)
+        controls.pack(fill="x", pady=(0, 7))
+        field_label(controls, "Giọng đọc", bg="#1D1412").pack(side="left")
+        self.voice = tk.StringVar(value="Nam Minh")
+        self.voice_combo = ttk.Combobox(
+            controls, textvariable=self.voice, values=["Nam Minh", "Hoài My"],
+            state="readonly", width=14
+        )
+        self.voice_combo.pack(side="left", padx=(7, 14))
+        field_label(controls, "Tốc độ", bg="#1D1412").pack(side="left")
+        self.rate = tk.StringVar(value="1.25")
+        self.rate_combo = ttk.Combobox(
+            controls, textvariable=self.rate, values=["0.75", "1.0", "1.25", "1.5", "2.0"],
+            state="readonly", width=8
+        )
+        self.rate_combo.pack(side="left", padx=7)
+
+        actions = tk.Frame(left, bg=PANEL)
+        actions.pack(fill="x", pady=(0, 7))
+        self.preview_button = button(actions, "NGHE THỬ GIỌNG", self.preview_voice)
+        self.preview_button.pack(side="left", padx=(0, 7))
+        self.start_button = button(actions, "BẮT ĐẦU TẠO AUDIO", self.start_actions_job, accent=True)
+        self.start_button.pack(side="left", padx=(0, 7))
+        button(actions, "CẤU HÌNH GITHUB", self.configure_connection).pack(side="left")
+        tk.Label(actions, text="Tối đa 3 đoạn song song · ghép thành một MP3",
+                 bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(side="left", padx=8)
+
         self.content_frame, self.content = text_box(left, 16)
         self.content_frame.pack(fill="both", expand=True)
         try_enable_drop(self.content, self.drop_audio)
-
-        controls = tk.Frame(left, bg="#1D1412", padx=10, pady=9, highlightthickness=1, highlightbackground=LINE)
-        controls.pack(fill="x", pady=(10, 8))
-        field_label(controls, "Giọng đọc", bg="#1D1412").pack(side="left")
-        self.voice = tk.StringVar(value="Nam Minh")
-        ttk.Combobox(controls, textvariable=self.voice,
-                     values=["Nam Minh", "Hoài My"], state="readonly", width=16).pack(side="left", padx=(7, 18))
-        field_label(controls, "Tốc độ", bg="#1D1412").pack(side="left")
-        self.rate = tk.StringVar(value="1.25")
-        ttk.Combobox(controls, textvariable=self.rate,
-                     values=["0.75", "1.0", "1.25", "1.5", "2.0"], state="readonly", width=9).pack(side="left", padx=7)
-        actions = tk.Frame(left, bg=PANEL)
-        actions.pack(fill="x", pady=(2, 0))
-        self.start_button = button(actions, "TẠO AUDIO", self.start_actions_job, accent=True)
-        self.start_button.pack(side="left")
-        button(actions, "CẤU HÌNH GITHUB", self.configure_connection).pack(side="left", padx=8)
-        tk.Label(actions, text="Tối đa 3 đoạn song song · một MP3 duy nhất",
-                 bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(side="left", padx=4)
 
         right = panel(columns)
         right.grid(row=0, column=1, sticky="nsew", padx=(7, 0))
@@ -691,10 +709,11 @@ class AudioPage(BasePage):
         self.history = tk.Listbox(
             list_frame, bg=INPUT, fg=TEXT, selectbackground="#5B1A25",
             relief="flat", bd=0, font=("Segoe UI", 9), activestyle="none",
-            selectmode="browse", height=12
+            selectmode="browse", height=5
         )
         self.history.pack(fill="both", expand=True, padx=5, pady=5)
         self.history.bind("<<ListboxSelect>>", self.on_history_select)
+        self.history.bind("<Double-Button-1>", self.play_selected)
 
         self.job_panel = tk.Frame(right, bg="#1D1412", padx=12, pady=12,
                                   highlightthickness=1, highlightbackground=LINE)
@@ -722,6 +741,72 @@ class AudioPage(BasePage):
         self.busy = False
         self._update_connection_status()
         self._refresh_history()
+
+    def preview_voice(self):
+        """Generate a short generic voice sample; do not send the user's story text."""
+        if getattr(self, "preview_busy", False):
+            return
+        voice_map = {
+            "Nam Minh": "vi-VN-NamMinhNeural",
+            "Hoài My": "vi-VN-HoaiMyNeural",
+        }
+        voice_id = voice_map.get(self.voice.get())
+        if not voice_id:
+            messagebox.showwarning("Giọng đọc", "Vui lòng chọn một giọng đọc hợp lệ.")
+            return
+        try:
+            rate_value = float(self.rate.get())
+        except ValueError:
+            messagebox.showwarning("Tốc độ", "Tốc độ đọc không hợp lệ.")
+            return
+        rate_text = f"{round((rate_value - 1.0) * 100):+d}%"
+        preview_path = Path(tempfile.gettempdir()) / f"sanh_truyen_preview_{voice_id}_{rate_text.replace('+','p').replace('-','m').replace('%','')}.mp3"
+        self.preview_busy = True
+        self.preview_button.configure(state="disabled")
+        self.job_status.set("Đang tạo bản nghe thử giọng...")
+        self.job_detail.set("Chỉ câu mẫu ngắn được gửi tới Edge TTS; nội dung truyện không được dùng cho bản nghe thử.")
+
+        def work():
+            try:
+                import edge_tts
+
+                async def synthesize():
+                    communicate = edge_tts.Communicate(
+                        "Xin chào. Đây là bản nghe thử giọng đọc của phần mềm Sảnh Truyện.",
+                        voice_id,
+                        rate=rate_text,
+                    )
+                    await communicate.save(str(preview_path))
+
+                asyncio.run(synthesize())
+                if not preview_path.is_file() or preview_path.stat().st_size < 512:
+                    raise RuntimeError("Dịch vụ không trả về file nghe thử hợp lệ.")
+                self.after(0, lambda path=preview_path: self._preview_voice_done(path))
+            except Exception as exc:
+                self.after(0, lambda error=str(exc): self._preview_voice_failed(error))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _preview_voice_done(self, path):
+        self.preview_busy = False
+        self.preview_button.configure(state="normal")
+        self.job_status.set("Đã tạo bản nghe thử")
+        self.job_detail.set(f"File nghe thử: {path}")
+        try:
+            if os.name == "nt":
+                os.startfile(path)
+            else:
+                webbrowser.open(path.as_uri())
+            self.app.set_status("Đã mở file nghe thử giọng.")
+        except Exception as exc:
+            messagebox.showerror("Không mở được file nghe thử", str(exc))
+
+    def _preview_voice_failed(self, error):
+        self.preview_busy = False
+        self.preview_button.configure(state="normal")
+        self.job_status.set("Nghe thử thất bại")
+        self.job_detail.set(error)
+        messagebox.showerror("Lỗi nghe thử giọng", error)
 
     def _update_connection_status(self):
         try:

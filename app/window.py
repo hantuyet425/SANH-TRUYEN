@@ -34,8 +34,14 @@ class SảnhTruyệnApp(BaseWindow):
     def __init__(self):
         super().__init__()
         self.title(APP_NAME)
-        self.geometry("1280x760")
-        self.minsize(1040, 660)
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        width = min(1280, max(960, screen_width - 40))
+        height = min(700, max(560, screen_height - 110))
+        x = max(0, (screen_width - width) // 2)
+        y = max(0, (screen_height - height) // 2)
+        self.geometry(f"{width}x{height}+{x}+{y}")
+        self.minsize(960, 560)
         self.configure(bg=self.BG)
         self._configure_style()
         self.current_page = None
