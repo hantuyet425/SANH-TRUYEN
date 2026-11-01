@@ -261,18 +261,35 @@ class AudioPage(BasePage):
         self.file_label = tk.Label(top, text="Chưa chọn file", bg=BG, fg=MUTED)
         self.file_label.pack(side="left", padx=10)
 
+        source_panel = panel(self, "Nội dung nguồn · có thể xem/sửa trước khi tạo")
+        source_panel.pack(fill="x", pady=(0, 8))
+        self.content_frame, self.content = text_box(source_panel, 5)
+        self.content_frame.pack(fill="x")
+        try_enable_drop(self.content, self.drop_audio)
+
         panes = tk.Frame(self, bg=BG)
         panes.pack(fill="both", expand=True)
-        panes.grid_columnconfigure(0, weight=1)
-        panes.grid_columnconfigure(1, weight=1)
+        panes.grid_columnconfigure(0, weight=5)
+        panes.grid_columnconfigure(1, weight=4)
         panes.grid_rowconfigure(0, weight=1)
-        left = panel(panes, "Nội dung tạo")
+        left = panel(panes, "Danh sách đoạn xử lý · theo thứ tự gốc")
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
-        right = panel(panes, "Kết quả từ API")
+        right = panel(panes, "Kết quả MP3 hoàn chỉnh theo AU")
         right.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
-        self.content_frame, self.content = text_box(left, 18)
-        self.content_frame.pack(fill="both", expand=True)
-        try_enable_drop(self.content, self.drop_audio)
+
+        self.segments = ttk.Treeview(
+            left, columns=("length", "state"), show="tree headings", height=18
+        )
+        self.segments.heading("#0", text="AU / ĐOẠN")
+        self.segments.heading("length", text="ĐỘ DÀI")
+        self.segments.heading("state", text="TRẠNG THÁI")
+        self.segments.column("#0", width=230, minwidth=150, stretch=True)
+        self.segments.column("length", width=95, anchor="center", stretch=False)
+        self.segments.column("state", width=125, anchor="w", stretch=False)
+        segment_scroll = ttk.Scrollbar(left, orient="vertical", command=self.segments.yview)
+        self.segments.configure(yscrollcommand=segment_scroll.set)
+        self.segments.pack(side="left", fill="both", expand=True)
+        segment_scroll.pack(side="right", fill="y")
 
         self.results = ttk.Treeview(right, columns=("au", "state", "file"), show="headings", height=18)
         for col, label, width in [
@@ -302,6 +319,7 @@ class AudioPage(BasePage):
         self.audio_dir = None
         self.pending = queue.Queue()
         self.running = False
+        self.segment_roots = {}
 
     def drop_audio(self, data):
         paths = parse_drop_files(data)
@@ -379,10 +397,18 @@ class AudioPage(BasePage):
             messagebox.showwarning("Không có nội dung", "Không tìm thấy nội dung audio.")
             return
         self.results.delete(*self.results.get_children())
+        self.segments.delete(*self.segments.get_children())
+        self.segment_roots = {}
         for index, (title, _body) in enumerate(chapters, 1):
             self.results.insert(
                 "", "end", iid=str(index),
                 values=(f"AU ({index}) · {title[:22]}", "Đang chờ", f"AU_{index:03d}.mp3")
+            )
+            root_id = f"au-{index}"
+            self.segment_roots[index] = root_id
+            self.segments.insert(
+                "", "end", iid=root_id, text=f"AU ({index}) · {title[:32]}",
+                values=("Chờ tách đoạn", "Đang chờ"), open=True
             )
         voice = TTS_VOICES[self.voice.get()]
         try:
@@ -417,7 +443,11 @@ class AudioPage(BasePage):
                             completed = int(item.get("completed_chunks", 0))
                             total = int(item.get("chunk_count", 0))
                             percent = int(item.get("progress_percent", 0))
-                            self.pending.put(("progress", i, item.get("status", "queued"), completed, total, percent))
+                            segments = item.get("segments", [])
+                            self.pending.put((
+                                "progress", i, item.get("status", "queued"),
+                                completed, total, percent, segments
+                            ))
                         job = client.wait_for_job(job_id, on_update=on_update, poll_seconds=3.0)
                     path = self.audio_dir / f"AU_{index:03d}.mp3"
                     client.download_audio(job, path)
@@ -429,6 +459,45 @@ class AudioPage(BasePage):
             self.pending.put(("done", successes, len(chapters), failures))
         except Exception as exc:
             self.pending.put(("error", str(exc)))
+
+    def refresh_segment_rows(self, au_index, job_state, segments):
+        """Render each server-side segment under its AU, preserving source numbering."""
+        root_id = self.segment_roots.get(au_index, f"au-{au_index}")
+        if not self.segments.exists(root_id):
+            self.segments.insert("", "end", iid=root_id, text=f"AU ({au_index})", open=True)
+            self.segment_roots[au_index] = root_id
+
+        state_names = {
+            "queued": "Đang chờ", "generating": "Đang tạo",
+            "completed": "Đã tạo xong", "failed": "Lỗi",
+        }
+        root_names = {
+            "queued": "Đang chờ", "generating": "Đang tạo đoạn",
+            "merging": "Đang ghép MP3", "completed": "Đã ghép MP3",
+            "failed": "Thất bại",
+        }
+        current_values = list(self.segments.item(root_id, "values"))
+        total = len(segments) or (current_values[0] if current_values else "Chờ tách đoạn")
+        if isinstance(total, int):
+            total = f"{total} đoạn"
+        self.segments.item(root_id, values=(total, root_names.get(job_state, job_state)))
+
+        for segment in sorted(segments, key=lambda part: int(part.get("index", 0))):
+            number = int(segment.get("index", 0))
+            if number < 1:
+                continue
+            iid = f"seg-{au_index}-{number}"
+            label = segment.get("label") or f"Đoạn {number:03d}"
+            char_count = int(segment.get("char_count", 0))
+            status = state_names.get(segment.get("status", "queued"), segment.get("status", "queued"))
+            if segment.get("error"):
+                status = "Lỗi · " + str(segment["error"])[:70]
+            values = (f"{char_count:,} ký tự", status)
+            if self.segments.exists(iid):
+                self.segments.item(iid, text=label, values=values)
+            else:
+                self.segments.insert(root_id, "end", iid=iid, text=label, values=values)
+        self.segments.item(root_id, open=True)
 
     def poll_audio(self):
         try:
@@ -447,22 +516,30 @@ class AudioPage(BasePage):
                     values[1] = f"Đã nhận job #{job_id}"
                     self.results.item(str(index), values=values)
                 elif kind == "progress":
-                    index, state, completed, total, percent = item[1:]
+                    index, state, completed, total, percent, segments = item[1:]
                     values = list(self.results.item(str(index), "values"))
-                    values[1] = f"{state} · {completed}/{total} ({percent}%)"
+                    state_names = {
+                        "queued": "Đang chờ", "generating": "Đang tạo đoạn",
+                        "merging": "ĐANG GHÉP MP3", "completed": "Hoàn thành",
+                        "failed": "Thất bại",
+                    }
+                    values[1] = f"{state_names.get(state, state)} · {completed}/{total} ({percent}%)"
                     self.results.item(str(index), values=values)
+                    self.refresh_segment_rows(index, state, segments)
                     self.status.set(f"AU ({index}) · {completed}/{total} đoạn · {percent}%")
                 elif kind == "done_one":
                     index, path = item[1], item[2]
                     values = list(self.results.item(str(index), "values"))
-                    values[1] = "Hoàn thành"
+                    values[1] = "Hoàn thành · MP3 đã tải"
                     values[2] = Path(path).name
                     self.results.item(str(index), values=values)
+                    self.refresh_segment_rows(index, "completed", [])
                 elif kind == "failed_one":
                     index, error = item[1], item[2]
                     values = list(self.results.item(str(index), "values"))
                     values[1] = "Thất bại"
                     self.results.item(str(index), values=values)
+                    self.refresh_segment_rows(index, "failed", [])
                     self.status.set(f"AU ({index}) thất bại")
                 elif kind == "done":
                     successes, total, failures = item[1:]
