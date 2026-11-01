@@ -16,6 +16,7 @@ from app.services.audio_github_client import (
     AudioGitHubClient,
     ensure_audio_credentials,
 )
+from app.services.audio_segments import MAX_SEGMENT_CHARACTERS, split_audio_segments
 from app.ui.pages import BasePage
 from app.ui.widgets import (
     BG, COPPER, INPUT, LINE, MUTED, PANEL, RED, TEXT,
@@ -52,16 +53,47 @@ class AudioPage(BasePage):
         # visible rows for voice, speed and the Create Audio action.
         # A compact editor height is intentional; it expands with the window.
         left.grid_columnconfigure(0, weight=1)
-        left.grid_rowconfigure(1, weight=1)
+        left.grid_rowconfigure(1, weight=3)
+        left.grid_rowconfigure(3, weight=2)
         tk.Label(left, text="NỘI DUNG TẠO", bg=PANEL, fg=TEXT,
                  font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 7))
-        self.content_frame, self.content = text_box(left, 8)
+        self.content_frame, self.content = text_box(left, 6)
         self.content_frame.grid(row=1, column=0, sticky="nsew")
         try_enable_drop(self.content, self.drop_audio)
 
+        segment_header = tk.Frame(left, bg=PANEL)
+        segment_header.grid(row=2, column=0, sticky="ew", pady=(9, 5))
+        tk.Label(segment_header, text="DANH SÁCH ĐOẠN ĐÃ CHIA", bg=PANEL, fg=TEXT,
+                 font=("Segoe UI", 9, "bold")).pack(side="left")
+        self.segment_count_var = tk.StringVar(
+            value=f"0 đoạn · tối đa {MAX_SEGMENT_CHARACTERS:,} ký tự/đoạn · 4 đồng thời"
+        )
+        tk.Label(segment_header, textvariable=self.segment_count_var, bg=PANEL, fg=COPPER,
+                 font=("Segoe UI", 8)).pack(side="right")
+
+        segment_frame = tk.Frame(left, bg=INPUT, highlightthickness=1, highlightbackground=LINE)
+        segment_frame.grid(row=3, column=0, sticky="nsew")
+        self.segment_list = tk.Listbox(
+            segment_frame, bg=INPUT, fg=TEXT, selectbackground="#5B1A25",
+            relief="flat", bd=0, font=("Consolas", 8), activestyle="none",
+            selectmode="browse", height=5,
+        )
+        segment_scroll = ttk.Scrollbar(
+            segment_frame, orient="vertical", command=self.segment_list.yview
+        )
+        self.segment_list.configure(yscrollcommand=segment_scroll.set)
+        self.segment_list.pack(side="left", fill="both", expand=True, padx=5, pady=4)
+        segment_scroll.pack(side="right", fill="y", pady=4)
+        self.segment_list.bind("<<ListboxSelect>>", self.on_segment_select)
+        self.segment_detail_var = tk.StringVar(value="Nạp TXT hoặc nhập nội dung để xem danh sách đoạn.")
+        tk.Label(
+            left, textvariable=self.segment_detail_var, bg=PANEL, fg=MUTED,
+            font=("Segoe UI", 8), justify="left", anchor="w", wraplength=560,
+        ).grid(row=4, column=0, sticky="ew", pady=(5, 0))
+
         controls = tk.Frame(left, bg="#1D1412", padx=10, pady=9,
                             highlightthickness=1, highlightbackground=LINE)
-        controls.grid(row=2, column=0, sticky="ew", pady=(9, 0))
+        controls.grid(row=5, column=0, sticky="ew", pady=(8, 0))
         field_label(controls, "Giọng đọc", bg="#1D1412").pack(side="left")
         self.voice = tk.StringVar(value="Nam Minh")
         self.voice_combo = ttk.Combobox(
@@ -79,7 +111,7 @@ class AudioPage(BasePage):
         self.rate_combo.pack(side="left", padx=7)
 
         self.start_button = button(left, "TẠO AUDIO", self.start_audio, accent=True)
-        self.start_button.grid(row=3, column=0, sticky="e", pady=(9, 0))
+        self.start_button.grid(row=6, column=0, sticky="e", pady=(8, 0))
 
         right = panel(columns)
         right.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
@@ -123,6 +155,11 @@ class AudioPage(BasePage):
         self.open_file_button.configure(state="disabled")
 
         self.source: Path | None = None
+        self.audio_segments: list[dict] = []
+        self._segment_state = "ready"
+        self._segment_preview_after_id = None
+        self.content.bind("<<Modified>>", self._on_content_modified)
+        self.content.edit_modified(False)
         self.audio_dir: Path | None = None
         self.history_path: Path | None = None
         self.history_records: list[dict] = []
@@ -131,6 +168,85 @@ class AudioPage(BasePage):
         self._timer_after_id = None
         self._active_record_id: str | None = None
         self._selected_record: dict | None = None
+
+    def _on_content_modified(self, _event=None):
+        try:
+            if not self.content.edit_modified():
+                return
+            self.content.edit_modified(False)
+        except tk.TclError:
+            return
+        if self._segment_preview_after_id is not None:
+            try:
+                self.after_cancel(self._segment_preview_after_id)
+            except tk.TclError:
+                pass
+        self._segment_preview_after_id = self.after(250, self._refresh_segments_from_editor)
+
+    def _refresh_segments_from_editor(self):
+        self._segment_preview_after_id = None
+        text = self.content.get("1.0", "end-1c")
+        self._set_segment_preview(text, state="ready")
+
+    def _set_segment_preview(self, text: str, state: str = "ready"):
+        self.audio_segments = split_audio_segments(text)
+        self._segment_state = state
+        count = len(self.audio_segments)
+        self.segment_count_var.set(
+            f"{count:,} đoạn · tối đa {MAX_SEGMENT_CHARACTERS:,} ký tự/đoạn · 4 đồng thời"
+        )
+        self._render_segment_list()
+
+    def _render_segment_list(self):
+        selected = self.segment_list.curselection()
+        selected_index = selected[0] if selected else 0
+        self.segment_list.delete(0, "end")
+        state_labels = {
+            "ready": "Sẵn sàng",
+            "submitted": "Đã gửi",
+            "completed": "Hoàn tất",
+            "failed": "Chưa hoàn tất",
+        }
+        state_label = state_labels.get(self._segment_state, "Sẵn sàng")
+        for item in self.audio_segments:
+            excerpt = " ".join(str(item["text"]).split())
+            if len(excerpt) > 48:
+                excerpt = excerpt[:45].rstrip() + "..."
+            chapter = str(item["chapter"])
+            if len(chapter) > 20:
+                chapter = chapter[:17].rstrip() + "..."
+            self.segment_list.insert(
+                "end",
+                f'{state_label:<12} {int(item["index"]):03d} | {chapter} | '
+                f'{int(item["characters"]):,} ký tự | {excerpt}',
+            )
+        if self.audio_segments:
+            selected_index = min(selected_index, len(self.audio_segments) - 1)
+            self.segment_list.selection_set(selected_index)
+            self.segment_list.activate(selected_index)
+            self.on_segment_select()
+        else:
+            self.segment_detail_var.set("Nạp TXT hoặc nhập nội dung để xem danh sách đoạn.")
+
+    def on_segment_select(self, _event=None):
+        selection = self.segment_list.curselection()
+        if not selection:
+            return
+        index = selection[0]
+        if index >= len(self.audio_segments):
+            return
+        item = self.audio_segments[index]
+        excerpt = " ".join(str(item["text"]).split())
+        if len(excerpt) > 260:
+            excerpt = excerpt[:257].rstrip() + "..."
+        self.segment_detail_var.set(
+            f'ĐOẠN {int(item["index"]):03d} · {item["chapter"]} · '
+            f'{int(item["characters"]):,} ký tự\n{excerpt}'
+        )
+
+    def _set_segment_state(self, state: str):
+        self._segment_state = state
+        self._render_segment_list()
 
     def load_file(self):
         selected = filedialog.askopenfilename(
@@ -159,6 +275,8 @@ class AudioPage(BasePage):
         self.source = path
         self.content.delete("1.0", "end")
         self.content.insert("1.0", content)
+        self.content.edit_modified(False)
+        self._set_segment_preview(content, state="ready")
         self.audio_dir = project_dir_for(path) / "audio"
         self.audio_dir.mkdir(parents=True, exist_ok=True)
         self.history_path = self.audio_dir / "audio_history.json"
@@ -356,6 +474,7 @@ class AudioPage(BasePage):
             self.history_path = self.audio_dir / "audio_history.json"
             self._refresh_history()
 
+        self._set_segment_preview(source_text, state="submitted")
         voice = self.voice.get().strip()
         rate = float(self.rate.get())
         record_id = uuid.uuid4().hex
@@ -380,6 +499,7 @@ class AudioPage(BasePage):
         self.open_button.configure(state="disabled")
         self.voice_combo.configure(state="disabled")
         self.rate_combo.configure(state="disabled")
+        self.content.configure(state="disabled")
         self.job_status.set("Đang gửi và tạo audiobook trên GitHub Actions...")
         self.app.set_status("Đang tạo audiobook. Đồng hồ đã bắt đầu.")
         self._start_timer()
@@ -413,6 +533,7 @@ class AudioPage(BasePage):
         self.open_button.configure(state="normal")
         self.voice_combo.configure(state="readonly")
         self.rate_combo.configure(state="readonly")
+        self.content.configure(state="normal")
 
     def _audio_done(self, output_path: Path | None):
         if output_path is None or not Path(output_path).is_file():
@@ -420,6 +541,7 @@ class AudioPage(BasePage):
             return
         elapsed = self._stop_timer()
         self._finish_job_controls()
+        self._set_segment_state("completed")
         self._update_record(
             file_path=str(output_path),
             elapsed_seconds=round(elapsed, 2),
@@ -439,6 +561,7 @@ class AudioPage(BasePage):
     def _audio_failed(self, error: str):
         elapsed = self._stop_timer()
         self._finish_job_controls()
+        self._set_segment_state("failed")
         self._update_record(
             elapsed_seconds=round(elapsed, 2),
             status="failed",
