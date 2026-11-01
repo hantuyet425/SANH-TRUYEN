@@ -185,6 +185,14 @@ class AudioPage(BasePage):
     def _refresh_history(self):
         self.history.delete(0, "end")
         self.history_records = self._load_history_records()
+        interrupted = False
+        for record in self.history_records:
+            if record.get("status") == "running":
+                record["status"] = "failed"
+                record["error"] = "Ứng dụng đã đóng trước khi nhận kết quả từ GitHub Actions."
+                interrupted = True
+        if interrupted:
+            self._save_history_records()
         known_paths = {
             str(Path(item.get("file_path", "")).resolve())
             for item in self.history_records if item.get("file_path")
@@ -412,11 +420,11 @@ class AudioPage(BasePage):
         self.rate_combo.configure(state="readonly")
 
     def _audio_done(self, output_path: Path | None):
-        elapsed = self._stop_timer()
-        self._finish_job_controls()
         if output_path is None or not Path(output_path).is_file():
             self._audio_failed("Worker không trả về audiobook.mp3 hợp lệ.")
             return
+        elapsed = self._stop_timer()
+        self._finish_job_controls()
         self._update_record(
             file_path=str(output_path),
             elapsed_seconds=round(elapsed, 2),
