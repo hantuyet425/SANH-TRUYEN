@@ -150,9 +150,11 @@ class AudioGitHubClient:
                     "Contents: Read and write, Actions: Read and write."
                 )
             if response.status_code == 404:
+                endpoint = f"{method.upper()} /repos/{self.repository}/{path.lstrip('/')}".rstrip("/")
+                suffix = f" ({detail})" if detail else ""
                 raise AudioGitHubError(
-                    "Không tìm thấy repo, workflow hoặc nhánh. Hãy kiểm tra repo "
-                    "SANH-TRUYEN-AUDIO và workflow generate-audio.yml."
+                    f"GitHub trả về HTTP 404 tại {endpoint}{suffix}. "
+                    "Thông báo này giúp xác định chính xác endpoint không tìm thấy."
                 )
             suffix = f" ({detail})" if detail else ""
             raise AudioGitHubError(
@@ -166,10 +168,42 @@ class AudioGitHubClient:
             raise AudioGitHubError("GitHub trả về dữ liệu không đúng định dạng.") from exc
 
     def test_connection(self) -> None:
-        repo = self._request("GET", "")
+        try:
+            repo = self._request("GET", "")
+        except AudioGitHubError as exc:
+            raise AudioGitHubError(
+                f"Không đọc được repository {self.repository}. "
+                f"Kiểm tra owner/repository và quyền token. Chi tiết: {exc}"
+            ) from exc
+
         if repo.get("full_name", "").lower() != self.repository.lower():
-            raise AudioGitHubError("Repo GitHub trả về không đúng tên SANH-TRUYEN-AUDIO.")
-        self._request("GET", f"actions/workflows/{AUDIO_WORKFLOW}")
+            raise AudioGitHubError(
+                "GitHub trả về repository không đúng tên SANH-TRUYEN-AUDIO."
+            )
+
+        try:
+            workflow = self._request("GET", f"actions/workflows/{AUDIO_WORKFLOW}")
+        except AudioGitHubError as exc:
+            raise AudioGitHubError(
+                f"Đã đọc được repository {self.repository}, nhưng không đọc được "
+                f"workflow {AUDIO_WORKFLOW}. Hãy kiểm tra GitHub Actions có được bật "
+                "và file workflow có nằm trên nhánh mặc định main hay không. "
+                f"Chi tiết: {exc}"
+            ) from exc
+
+        expected_path = f".github/workflows/{AUDIO_WORKFLOW}"
+        actual_path = str(workflow.get("path") or "").lstrip("/")
+        if actual_path and actual_path != expected_path:
+            raise AudioGitHubError(
+                f"GitHub tìm thấy workflow nhưng đường dẫn trả về là {actual_path}, "
+                f"trong khi ứng dụng cần {expected_path}."
+            )
+        state = workflow.get("state")
+        if state and state != "active":
+            raise AudioGitHubError(
+                f"Workflow {AUDIO_WORKFLOW} hiện có trạng thái {state}, không phải active. "
+                "Hãy bật workflow trong tab Actions của repository."
+            )
 
     def _delete_branch(self, branch: str) -> None:
         try:
