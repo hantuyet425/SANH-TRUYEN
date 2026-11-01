@@ -78,7 +78,7 @@ Audio được xử lý bởi repository riêng, không chạy bộ tổng hợp
 1. Tải [Story-TTS-API ZIP](https://github.com/hantuyet425/Story-TTS-API/archive/refs/heads/main.zip) và giải nén, ví dụ vào `D:\STORY-TTS-API`.
 2. Cài Python 3.11 64-bit nếu chưa có.
 3. Mở thư mục API và chạy `install-windows.bat`.
-4. Cuối quá trình, cửa sổ sẽ hiện API key riêng của máy. Sao chép key này.
+4. Cuối quá trình, cửa sổ sẽ hiện API key riêng của máy. Sao chép key này; nếu quên, chạy `show-api-key.bat` trong thư mục API để xem lại.
 5. Chạy `run-windows.bat` và giữ cửa sổ đó mở trong khi tạo audio.
 6. Trong SẢNH TRUYỆN → Tạo Audio, nhập API URL `http://127.0.0.1:8000`, dán API key rồi nhấn **Lưu & Kiểm tra**.
 
