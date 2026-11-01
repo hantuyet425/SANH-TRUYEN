@@ -13,7 +13,7 @@ from app.services.epub_service import convert_epub_to_txt
 from app.services.hachimi_service import HachimiTranslator
 from app.services.tts_service import split_chapters
 from app.services.chapter_numbering import renumber_chapters, count_chapters
-from app.services.tts_api_client import StoryTTSClient, StoryTTSAPIError, load_audio_api_settings, save_audio_api_settings
+from app.services.audio_github_client import AudioGitHubClient, AudioGitHubError, generate_shared_key, load_audio_credentials, save_audio_credentials
 from app.ui.widgets import heading, eyebrow, panel, button, text_box, field_label, try_enable_drop, BG, PANEL, PANEL_2, COPPER, RED, TEXT, MUTED, LINE, INPUT
 
 
