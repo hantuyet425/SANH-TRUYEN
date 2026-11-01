@@ -8,6 +8,9 @@
 
 ## Tải ZIP từ GitHub
 
+**Tải ZIP trực tiếp:** [SANH-TRUYEN-main.zip](https://github.com/hantuyet425/SANH-TRUYEN/archive/refs/heads/main.zip).
+
+Hoặc tải thủ công:
 1. Mở trang [hantuyet425/SANH-TRUYEN](https://github.com/hantuyet425/SANH-TRUYEN).
 2. Nhấn nút **Code** màu xanh.
 3. Chọn **Download ZIP**.
