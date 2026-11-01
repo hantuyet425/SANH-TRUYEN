@@ -635,7 +635,7 @@ class AudioPage(BasePage):
     def __init__(self, parent, app):
         super().__init__(parent, app)
         eyebrow(self, "03 / Listen").pack(anchor="w", pady=(0, 8))
-        heading(self, "Phòng thu audio", "Biến bản truyện thành MP3 dài với giọng đọc và tốc độ bạn lựa chọn.")
+        heading(self, "Phòng thu audio", "Chia đoạn, tổng hợp song song và ghép thành một audiobook MP3 hoàn chỉnh.")
 
         columns = tk.Frame(self, bg=BG)
         columns.pack(fill="both", expand=True)
@@ -672,13 +672,13 @@ class AudioPage(BasePage):
         self.start_button = button(actions, "TẠO AUDIO", self.start_actions_job, accent=True)
         self.start_button.pack(side="left")
         button(actions, "CẤU HÌNH GITHUB", self.configure_connection).pack(side="left", padx=8)
-        tk.Label(actions, text="Xử lý trên GitHub Actions · MP3 giải mã tại máy",
+        tk.Label(actions, text="Tối đa 3 đoạn song song · một MP3 duy nhất",
                  bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(side="left", padx=4)
 
         right = panel(columns)
         right.grid(row=0, column=1, sticky="nsew", padx=(7, 0))
         tk.Label(right, text="KẾT QUẢ AUDIO", bg=PANEL, fg=TEXT, font=("Segoe UI", 11, "bold")).pack(anchor="w")
-        tk.Label(right, text="Theo dõi tiến trình và mở các file MP3 đã tạo.",
+        tk.Label(right, text="Theo dõi tiến trình và mở audiobook MP3 đã hoàn tất.",
                  bg=PANEL, fg=MUTED, font=("Segoe UI", 9)).pack(anchor="w", pady=(5, 10))
         self.connection_status = tk.StringVar(value="Đang kiểm tra cấu hình...")
         tk.Label(right, textvariable=self.connection_status, bg=PANEL, fg=COPPER,
@@ -841,16 +841,17 @@ class AudioPage(BasePage):
     def _audio_job_done(self, outputs):
         self.busy = False
         self.start_button.configure(state="normal")
-        self.job_status.set("Hoàn tất · đã nhận MP3")
+        self.job_status.set("Hoàn tất · audiobook.mp3")
         self.job_detail.set(
-            f"Đã tải {len(outputs)} file MP3 vào thư mục audio cục bộ. "
-            "Bản tải từ GitHub đã được giải mã bằng khóa đang lưu trên máy."
+            "Đã tải audiobook.mp3 hoàn chỉnh vào thư mục audio cục bộ. "
+            "Các đoạn đã được ghép theo thứ tự truyện và giải mã ngay trên máy."
         )
         self._refresh_history()
-        self.app.set_status(f"Đã tạo xong {len(outputs)} file MP3.")
+        self.app.set_status("Đã tạo xong audiobook.mp3.")
+        output_path = outputs[0] if outputs else self.audio_dir
         messagebox.showinfo(
             "Tạo audio hoàn tất",
-            f"Đã tạo {len(outputs)} file MP3.\nLưu tại:\n{self.audio_dir}"
+            f"Đã tạo audiobook.mp3.\nLưu tại:\n{output_path}"
         )
 
     def _audio_job_failed(self, error):
