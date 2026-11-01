@@ -562,6 +562,12 @@ class TranslatePage(BasePage):
             "công pháp, chức danh và thuật ngữ; quy tắc phiên âm/tên riêng; giọng văn; các điểm "
             "chưa rõ cần giữ trung tính. Phân biệt dữ kiện chắc chắn với suy luận, không tự bịa canon. "
             "Ưu tiên RAW, không dùng kiến thức ngoài để ghi đè nội dung nguồn. Giữ thuật ngữ nhất quán. "
+            "RAW có thể xen quảng cáo hoặc thông tin do website đăng truyện chèn thêm, thường có dạng PS, "
+            "lời mời đọc truyện ở trang khác, tải ứng dụng, theo dõi, donate, đường dẫn, mã giới thiệu, "
+            "QR hoặc thông tin liên hệ. Hãy bỏ qua hoàn toàn những phần quảng bá thuần túy này: không xem "
+            "chúng là dữ kiện của tác phẩm và không đưa chúng vào hồ sơ. Không nhầm chúng với tình tiết "
+            "hư cấu hoặc ghi chú tác giả thực sự có ý nghĩa đối với truyện; nếu một đoạn vừa có quảng cáo "
+            "vừa có thông tin cốt truyện, chỉ bỏ qua phần quảng cáo. "
             "Chỉ trả hồ sơ tham chiếu, tuyệt đối không dịch hoặc viết lại RAW ở bước này.\n\n"
             f"TÊN TRUYỆN: {name}\n"
             f"LÔ: {batch_index + 1}/{self._batch_count()} · {self._range_label(batch_index)}\n\n"
@@ -594,6 +600,15 @@ class TranslatePage(BasePage):
             "Không thêm, lược, bịa tình tiết, thông tin, cảm xúc hoặc diễn biến. "
             "Giữ nguyên đầy đủ tiêu đề chương, thứ tự, tên riêng và thuật ngữ. "
             "Không gộp, tách, bỏ hoặc tự tạo chương. Duy trì xưng hô và thuật ngữ theo hồ sơ. "
+            "LỌC QUẢNG CÁO NGOÀI TRUYỆN: RAW có thể chứa PS/quảng cáo trang đọc truyện, lời mời truy cập "
+            "website khác, tải ứng dụng, theo dõi, donate, đường dẫn, mã QR, mã giới thiệu hoặc thông tin "
+            "liên hệ do nền tảng đăng truyện chèn thêm. Với phần thuần quảng cáo hoặc thông tin quảng bá "
+            "không thuộc tác phẩm, phải loại bỏ hoàn toàn khỏi đầu ra: không dịch, không chép lại, không "
+            "paraphrase, không tóm tắt và không thay bằng quảng cáo khác. Tuyệt đối không tự thêm quảng cáo, "
+            "lời mời đọc truyện hay thông tin website vào đầu hoặc cuối bản dịch. Chỉ bỏ phần xác định rõ "
+            "là quảng cáo ngoài truyện; phải giữ nguyên tình tiết, lời thoại và văn bản thuộc thế giới hư cấu "
+            "của tác phẩm, cũng như ghi chú tác giả thực sự có ý nghĩa với nội dung truyện. Nếu một đoạn PS "
+            "vừa có quảng cáo vừa có nội dung liên quan đến truyện, chỉ loại bỏ phần quảng cáo. "
             "Chỉ trả nội dung đã dịch, không giải thích, không mở đầu hay kết luận ngoài truyện.",
             f"TÊN TRUYỆN: {self.source.stem if self.source else 'Tiểu thuyết'}",
             f"LÔ {batch_index + 1}/{self._batch_count()} · LƯỢT {turn_index + 1}/{len(turns)} · CHƯƠNG {first_chapter}–{last_chapter}",
