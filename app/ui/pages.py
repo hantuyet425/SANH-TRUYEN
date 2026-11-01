@@ -11,7 +11,8 @@ from app.utils import read_text_file, split_text, parse_drop_files
 from app.services.browser_service import open_chrome
 from app.services.epub_service import convert_epub_to_txt
 from app.services.hachimi_service import HachimiTranslator
-from app.services.tts_service import split_chapters, create_mp3
+from app.services.tts_service import split_chapters
+from app.services.tts_api_client import StoryTTSClient, StoryTTSAPIError, load_audio_api_settings, save_audio_api_settings
 from app.ui.widgets import heading, panel, button, text_box, try_enable_drop, BG, PANEL, COPPER, TEXT, MUTED
 
 
@@ -233,33 +234,74 @@ class TranslatePage(BasePage):
 class AudioPage(BasePage):
     def __init__(self, parent, app):
         super().__init__(parent, app)
-        heading(self, "Tạo Audio", "Chuyển TXT tiếng Việt thành MP3 theo chương / AU")
-        top = tk.Frame(self, bg=BG); top.pack(fill="x", pady=(0, 10))
+        heading(self, "Tạo Audio", "SẢNH TRUYỆN gửi nội dung sang Story TTS API riêng; dịch vụ trả MP3 hoàn chỉnh về đây")
+
+        saved = load_audio_api_settings()
+        connection = panel(self, "Kết nối dịch vụ Story TTS API")
+        connection.pack(fill="x", pady=(0, 10))
+        row = tk.Frame(connection, bg=PANEL)
+        row.pack(fill="x")
+        tk.Label(row, text="API URL", bg=PANEL, fg=MUTED).pack(side="left")
+        self.api_url = tk.StringVar(value=saved["url"])
+        ttk.Entry(row, textvariable=self.api_url, width=39).pack(side="left", padx=(6, 14))
+        tk.Label(row, text="API KEY", bg=PANEL, fg=MUTED).pack(side="left")
+        self.api_key = tk.StringVar(value=saved["api_key"])
+        ttk.Entry(row, textvariable=self.api_key, width=35, show="•").pack(side="left", padx=6)
+        button(row, "LƯU & KIỂM TRA", self.check_api, accent=True).pack(side="left", padx=(8, 0))
+        button(row, "REPO API", lambda: webbrowser.open("https://github.com/hantuyet425/Story-TTS-API")).pack(side="right", padx=(8, 0))
+        tk.Label(
+            connection,
+            text="Mặc định: http://127.0.0.1:8000 · API key được lưu cục bộ trong data/settings.json, không đưa lên GitHub.",
+            bg=PANEL, fg=MUTED, font=("Segoe UI", 8)
+        ).pack(anchor="w", pady=(8, 0))
+
+        top = tk.Frame(self, bg=BG)
+        top.pack(fill="x", pady=(0, 10))
         button(top, "MỞ FILE TXT ĐÃ DỊCH", self.load_file, accent=True).pack(side="left")
-        self.file_label = tk.Label(top, text="Chưa chọn file", bg=BG, fg=MUTED); self.file_label.pack(side="left", padx=10)
-        panes = tk.Frame(self, bg=BG); panes.pack(fill="both", expand=True)
-        panes.grid_columnconfigure(0, weight=1); panes.grid_columnconfigure(1, weight=1); panes.grid_rowconfigure(0, weight=1)
-        left = panel(panes, "Nội dung tạo"); left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
-        right = panel(panes, "Kết quả"); right.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
-        self.content_frame, self.content = text_box(left, 18); self.content_frame.pack(fill="both", expand=True)
+        self.file_label = tk.Label(top, text="Chưa chọn file", bg=BG, fg=MUTED)
+        self.file_label.pack(side="left", padx=10)
+
+        panes = tk.Frame(self, bg=BG)
+        panes.pack(fill="both", expand=True)
+        panes.grid_columnconfigure(0, weight=1)
+        panes.grid_columnconfigure(1, weight=1)
+        panes.grid_rowconfigure(0, weight=1)
+        left = panel(panes, "Nội dung tạo")
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        right = panel(panes, "Kết quả từ API")
+        right.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        self.content_frame, self.content = text_box(left, 18)
+        self.content_frame.pack(fill="both", expand=True)
         try_enable_drop(self.content, self.drop_audio)
+
         self.results = ttk.Treeview(right, columns=("au", "state", "file"), show="headings", height=18)
-        for col, label, width in [("au", "TÁC VỤ", 190), ("state", "TRẠNG THÁI", 110), ("file", "FILE", 140)]:
-            self.results.heading(col, text=label); self.results.column(col, width=width)
+        for col, label, width in [
+            ("au", "TÁC VỤ", 175),
+            ("state", "TIẾN ĐỘ API", 155),
+            ("file", "FILE MP3", 130),
+        ]:
+            self.results.heading(col, text=label)
+            self.results.column(col, width=width)
         self.results.pack(fill="both", expand=True)
-        settings = tk.Frame(self, bg=BG); settings.pack(fill="x", pady=10)
+
+        settings = tk.Frame(self, bg=BG)
+        settings.pack(fill="x", pady=10)
         tk.Label(settings, text="Giọng", bg=BG, fg=MUTED).pack(side="left")
         self.voice = tk.StringVar(value=list(TTS_VOICES)[0])
         ttk.Combobox(settings, textvariable=self.voice, values=list(TTS_VOICES), state="readonly", width=18).pack(side="left", padx=6)
         tk.Label(settings, text="Tốc độ", bg=BG, fg=MUTED).pack(side="left")
         self.rate = tk.StringVar(value="1.0x")
         ttk.Combobox(settings, textvariable=self.rate, values=list(TTS_RATES), state="readonly", width=8).pack(side="left", padx=6)
-        button(settings, "TẠO AUDIO", self.generate, accent=True).pack(side="left", padx=6)
+        button(settings, "GỬI TẠO AUDIO", self.generate, accent=True).pack(side="left", padx=6)
         button(settings, "NGHE THỬ / MỞ MP3", self.play_selected).pack(side="left")
         button(settings, "MỞ THƯ MỤC AUDIO", self.open_audio_folder).pack(side="left", padx=6)
         self.status = tk.StringVar(value="Sẵn sàng")
         tk.Label(settings, textvariable=self.status, bg=BG, fg=COPPER).pack(side="left", padx=8)
-        self.source = None; self.audio_dir = None; self.pending = queue.Queue(); self.running = False
+
+        self.source = None
+        self.audio_dir = None
+        self.pending = queue.Queue()
+        self.running = False
 
     def drop_audio(self, data):
         paths = parse_drop_files(data)
@@ -267,70 +309,202 @@ class AudioPage(BasePage):
             self.load_path(Path(paths[0].strip("{}")))
 
     def load_file(self):
-        p = filedialog.askopenfilename(filetypes=[("Text", "*.txt")])
-        if p: self.load_path(Path(p))
+        path = filedialog.askopenfilename(filetypes=[("Text", "*.txt")])
+        if path:
+            self.load_path(Path(path))
 
     def load_path(self, path):
-        try: text = read_text_file(path)
-        except Exception as exc: messagebox.showerror("Lỗi đọc TXT", str(exc)); return
-        self.source = path; self.content.delete("1.0", "end"); self.content.insert("1.0", text)
-        self.audio_dir = project_dir_for(path) / "audio"; self.audio_dir.mkdir(parents=True, exist_ok=True)
-        self.file_label.config(text=path.name); self.status.set("Đã nạp nội dung.")
+        try:
+            text = read_text_file(path)
+        except Exception as exc:
+            messagebox.showerror("Lỗi đọc TXT", str(exc))
+            return
+        if not text.strip():
+            messagebox.showwarning("File trống", "TXT không có nội dung.")
+            return
+        self.source = path
+        self.content.delete("1.0", "end")
+        self.content.insert("1.0", text)
+        self.audio_dir = project_dir_for(path) / "audio"
+        self.audio_dir.mkdir(parents=True, exist_ok=True)
+        self.file_label.config(text=path.name)
+        self.status.set("Đã nạp nội dung.")
+
+    def check_api(self):
+        url = self.api_url.get().strip().rstrip("/")
+        key = self.api_key.get().strip()
+        if not url or not key:
+            messagebox.showwarning("Thiếu cấu hình", "Nhập API URL và API key trước.")
+            return
+        try:
+            save_audio_api_settings(url, key)
+        except Exception as exc:
+            messagebox.showerror("Không lưu được", str(exc))
+            return
+        self.status.set("Đang kiểm tra Story TTS API...")
+        def worker():
+            try:
+                client = StoryTTSClient(url, key)
+                result = client.check_connection()
+                voices = ", ".join(item.get("name", item.get("id", "")) for item in result.get("voices", []))
+                self.after(0, lambda: self.status.set(f"Kết nối thành công · {voices}"))
+            except Exception as exc:
+                self.after(0, lambda e=str(exc): self.status.set(f"API chưa kết nối: {e}"))
+        threading.Thread(target=worker, daemon=True).start()
 
     def generate(self):
-        if self.running: messagebox.showinfo("Đang chạy", "Tác vụ audio hiện đang chạy."); return
+        if self.running:
+            messagebox.showinfo("Đang chạy", "Tác vụ gửi audio đang chạy.")
+            return
         text = self.content.get("1.0", "end-1c").strip()
-        if not text: messagebox.showinfo("Thiếu nội dung", "Hãy mở TXT hoặc kéo file vào khung trái."); return
+        if not text:
+            messagebox.showinfo("Thiếu nội dung", "Hãy mở TXT hoặc kéo file vào khung trái.")
+            return
+        url = self.api_url.get().strip().rstrip("/")
+        key = self.api_key.get().strip()
+        if not url or not key:
+            messagebox.showwarning("Thiếu kết nối", "Nhập API URL và API key, sau đó nhấn LƯU & KIỂM TRA.")
+            return
+        try:
+            save_audio_api_settings(url, key)
+        except Exception as exc:
+            messagebox.showerror("Không lưu được cấu hình", str(exc))
+            return
         if self.audio_dir is None:
-            self.audio_dir = Path.cwd() / "data" / "audio"; self.audio_dir.mkdir(parents=True, exist_ok=True)
+            self.audio_dir = Path.cwd() / "data" / "audio"
+            self.audio_dir.mkdir(parents=True, exist_ok=True)
+
         chapters = split_chapters(text)
+        if not chapters:
+            messagebox.showwarning("Không có nội dung", "Không tìm thấy nội dung audio.")
+            return
         self.results.delete(*self.results.get_children())
-        for i, (title, _) in enumerate(chapters, 1):
-            self.results.insert("", "end", iid=str(i), values=(f"AU ({i}) · {title[:24]}", "Đang chờ", f"AU_{i:03d}.mp3"))
-        voice = TTS_VOICES[self.voice.get()]; rate = TTS_RATES[self.rate.get()]
-        self.running = True; self.status.set("Đang tạo audio; cần Internet.")
-        threading.Thread(target=self.audio_worker, args=(chapters, voice, rate), daemon=True).start()
+        for index, (title, _body) in enumerate(chapters, 1):
+            self.results.insert(
+                "", "end", iid=str(index),
+                values=(f"AU ({index}) · {title[:22]}", "Đang chờ", f"AU_{index:03d}.mp3")
+            )
+        voice = TTS_VOICES[self.voice.get()]
+        try:
+            rate = float(self.rate.get().rstrip("x"))
+        except ValueError:
+            messagebox.showerror("Tốc độ không hợp lệ", "Hãy chọn lại tốc độ đọc.")
+            return
+        self.running = True
+        self.status.set("Đang gửi nội dung sang Story TTS API...")
+        threading.Thread(
+            target=self.audio_worker,
+            args=(chapters, voice, rate, url, key),
+            daemon=True,
+        ).start()
         self.after(300, self.poll_audio)
 
-    def audio_worker(self, chapters, voice, rate):
+    def audio_worker(self, chapters, voice, rate, api_url, api_key):
+        client = None
+        successes = 0
+        failures = []
         try:
-            for i, (title, body) in enumerate(chapters, 1):
-                self.pending.put(("state", i, "Đang tạo"))
-                path = self.audio_dir / f"AU_{i:03d}.mp3"
-                create_mp3(body, voice, rate, path)
-                self.pending.put(("done_one", i, str(path)))
-            self.pending.put(("done",))
-        except Exception as exc: self.pending.put(("error", str(exc)))
+            client = StoryTTSClient(api_url, api_key)
+            for index, (title, body) in enumerate(chapters, 1):
+                self.pending.put(("state", index, "Đang gửi API"))
+                try:
+                    chapter_id = f"{self.source.stem if self.source else 'story'}/AU-{index:04d}"
+                    job = client.create_job(body, voice, rate, chapter_id)
+                    job_id = int(job["job_id"])
+                    self.pending.put(("job_id", index, job_id))
+                    if job.get("status") != "completed":
+                        def on_update(item, i=index):
+                            completed = int(item.get("completed_chunks", 0))
+                            total = int(item.get("chunk_count", 0))
+                            percent = int(item.get("progress_percent", 0))
+                            self.pending.put(("progress", i, item.get("status", "queued"), completed, total, percent))
+                        job = client.wait_for_job(job_id, on_update=on_update, poll_seconds=3.0)
+                    path = self.audio_dir / f"AU_{index:03d}.mp3"
+                    client.download_audio(job, path)
+                    successes += 1
+                    self.pending.put(("done_one", index, str(path)))
+                except Exception as exc:
+                    failures.append(f"AU ({index}): {exc}")
+                    self.pending.put(("failed_one", index, str(exc)))
+            self.pending.put(("done", successes, len(chapters), failures))
+        except Exception as exc:
+            self.pending.put(("error", str(exc)))
 
     def poll_audio(self):
         try:
             while True:
                 item = self.pending.get_nowait()
-                if item[0] == "state":
-                    i, state = item[1:]; values = list(self.results.item(str(i), "values")); values[1] = state
-                    self.results.item(str(i), values=values); self.status.set(f"Đang tạo AU ({i})...")
-                elif item[0] == "done_one":
-                    i, path = item[1:]; values = list(self.results.item(str(i), "values"))
-                    values[1] = "Hoàn thành"; values[2] = Path(path).name; self.results.item(str(i), values=values)
-                elif item[0] == "done":
-                    self.running = False; self.status.set("Đã tạo xong toàn bộ audio.")
-                    messagebox.showinfo("Hoàn thành", f"Audio lưu tại:\n{self.audio_dir}")
-                elif item[0] == "error":
-                    self.running = False; self.status.set("Có lỗi")
-                    messagebox.showerror("Lỗi Edge TTS", item[1])
-        except queue.Empty: pass
-        if self.running: self.after(300, self.poll_audio)
+                kind = item[0]
+                if kind == "state":
+                    index, state = item[1], item[2]
+                    values = list(self.results.item(str(index), "values"))
+                    values[1] = state
+                    self.results.item(str(index), values=values)
+                    self.status.set(f"Đang xử lý AU ({index})...")
+                elif kind == "job_id":
+                    index, job_id = item[1], item[2]
+                    values = list(self.results.item(str(index), "values"))
+                    values[1] = f"Đã nhận job #{job_id}"
+                    self.results.item(str(index), values=values)
+                elif kind == "progress":
+                    index, state, completed, total, percent = item[1:]
+                    values = list(self.results.item(str(index), "values"))
+                    values[1] = f"{state} · {completed}/{total} ({percent}%)"
+                    self.results.item(str(index), values=values)
+                    self.status.set(f"AU ({index}) · {completed}/{total} đoạn · {percent}%")
+                elif kind == "done_one":
+                    index, path = item[1], item[2]
+                    values = list(self.results.item(str(index), "values"))
+                    values[1] = "Hoàn thành"
+                    values[2] = Path(path).name
+                    self.results.item(str(index), values=values)
+                elif kind == "failed_one":
+                    index, error = item[1], item[2]
+                    values = list(self.results.item(str(index), "values"))
+                    values[1] = "Thất bại"
+                    self.results.item(str(index), values=values)
+                    self.status.set(f"AU ({index}) thất bại")
+                elif kind == "done":
+                    successes, total, failures = item[1:]
+                    self.running = False
+                    if failures:
+                        self.status.set(f"Hoàn tất {successes}/{total} AU · có {len(failures)} lỗi")
+                        messagebox.showwarning(
+                            "Audio hoàn tất một phần",
+                            f"Đã tạo {successes}/{total} AU.\n\n" + "\n".join(failures[:8])
+                        )
+                    else:
+                        self.status.set(f"Đã tạo xong {successes} AU.")
+                        messagebox.showinfo("Hoàn thành", f"MP3 được tải về:\n{self.audio_dir}")
+                elif kind == "error":
+                    self.running = False
+                    self.status.set("Có lỗi khi kết nối API")
+                    messagebox.showerror("Story TTS API", item[1])
+        except queue.Empty:
+            pass
+        if self.running:
+            self.after(300, self.poll_audio)
 
     def play_selected(self):
         selection = self.results.selection()
-        if not selection: messagebox.showinfo("Chọn AU", "Hãy chọn một AU trong danh sách."); return
+        if not selection:
+            messagebox.showinfo("Chọn AU", "Hãy chọn một AU trong danh sách.")
+            return
         filename = self.results.item(selection[0], "values")[2]
         path = self.audio_dir / filename
-        if not path.exists(): messagebox.showwarning("Chưa có file", "AU này chưa tạo xong."); return
-        if os.name == "nt": os.startfile(path)
-        else: webbrowser.open(path.as_uri())
+        if not path.exists():
+            messagebox.showwarning("Chưa có file", "AU này chưa tải hoàn tất.")
+            return
+        if os.name == "nt":
+            os.startfile(path)
+        else:
+            webbrowser.open(path.as_uri())
 
     def open_audio_folder(self):
-        if not self.audio_dir: messagebox.showinfo("Chưa có thư mục", "Hãy nạp TXT trước."); return
-        if os.name == "nt": os.startfile(self.audio_dir)
-        else: webbrowser.open(self.audio_dir.as_uri())
+        if not self.audio_dir:
+            messagebox.showinfo("Chưa có thư mục", "Hãy nạp TXT trước.")
+            return
+        if os.name == "nt":
+            os.startfile(self.audio_dir)
+        else:
+            webbrowser.open(self.audio_dir.as_uri())
