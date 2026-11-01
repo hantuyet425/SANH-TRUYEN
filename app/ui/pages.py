@@ -286,6 +286,7 @@ class TranslatePage(BasePage):
         self.status = tk.StringVar(value="Sẵn sàng")
         tk.Label(footer, textvariable=self.status, bg=BG, fg=MUTED, font=("Segoe UI", 8)).pack(side="left", padx=(12, 0))
         button(footer, "LƯU BẢN DỊCH", self.save_translation).pack(side="right", padx=(7, 0))
+        button(footer, "NHẬN CLIPBOARD", self.paste_clipboard).pack(side="right", padx=(7, 0))
         button(footer, "BẮT ĐẦU DỊCH", self.run_selected_engine, accent=True).pack(side="right", padx=(7, 0))
         button(footer, "ĐOẠN TIẾP →", self.next_chunk).pack(side="right", padx=(7, 0))
         button(footer, "← ĐOẠN TRƯỚC", self.prev_chunk).pack(side="right")
