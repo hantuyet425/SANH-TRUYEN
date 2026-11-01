@@ -9,7 +9,9 @@ except Exception:
     BaseWindow = tk.Tk
 
 from app.config import APP_NAME, PROJECTS_DIR, DOWNLOAD_DIR
-from app.ui.pages import DashboardPage, CrawlPage, TranslatePage, AudioPage
+from app.ui.pages import DashboardPage, CrawlPage
+from app.ui.workflow_pages import TranslatePage
+from app.ui.audio_workflow_page import AudioPage
 
 
 class SảnhTruyệnApp(BaseWindow):
