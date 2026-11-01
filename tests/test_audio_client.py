@@ -61,9 +61,40 @@ class AudioGitHubClientTests(unittest.TestCase):
                 )
 
             self.assertEqual(len(outputs), 1)
-            self.assertEqual(outputs[0].name, "audiobook.mp3")
+            self.assertEqual(outputs[0].name, "au1.mp3")
+            self.assertEqual(outputs[0].parent, Path(temporary))
             self.assertEqual(outputs[0].read_bytes(), b"the-whole-novel")
-            self.assertTrue((outputs[0].parent / "manifest.json").is_file())
+            self.assertTrue(
+                (Path(temporary) / f"audio_{self.job_id[:8]}" / "manifest.json").is_file()
+            )
+
+
+    def test_each_new_audiobook_gets_the_next_au_number(self):
+        artifact_data = self.make_artifact({
+            "audiobook.mp3": b"one-complete-book",
+            "manifest.json": b'{"audio_file":"audiobook.mp3"}',
+        })
+        response = Mock()
+        response.content = artifact_data
+        response.raise_for_status = Mock()
+
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch.object(self.client.session, "get", return_value=response):
+                first = self.client._download_and_extract(
+                    {"id": 9876}, self.job_id, Path(temporary)
+                )
+                second = self.client._download_and_extract(
+                    {"id": 9877}, "abcdef0123456789", Path(temporary)
+                )
+
+            self.assertEqual(first[0].name, "au1.mp3")
+            self.assertEqual(second[0].name, "au2.mp3")
+            self.assertEqual(first[0].read_bytes(), b"one-complete-book")
+            self.assertEqual(second[0].read_bytes(), b"one-complete-book")
+            self.assertEqual(
+                sorted(path.name for path in Path(temporary).glob("au*.mp3")),
+                ["au1.mp3", "au2.mp3"],
+            )
 
     def test_rejects_legacy_chapter_tracks_without_full_audiobook(self):
         artifact_data = self.make_artifact({

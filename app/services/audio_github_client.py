@@ -31,6 +31,33 @@ class AudioGitHubError(RuntimeError):
     """A safe, user-readable GitHub Audio connection or job error."""
 
 
+def _move_to_next_numbered_audiobook(source: Path, audio_dir: Path) -> Path:
+    """Move one completed audiobook to au1.mp3, au2.mp3, ... without overwriting."""
+    highest = 0
+    for existing in audio_dir.rglob("au*.mp3"):
+        suffix = existing.stem[2:] if existing.stem.lower().startswith("au") else ""
+        if suffix.isdigit():
+            highest = max(highest, int(suffix))
+
+    index = highest + 1
+    while True:
+        target = audio_dir / f"au{index}.mp3"
+        try:
+            # Exclusive creation also protects against two app instances finishing together.
+            with target.open("xb"):
+                pass
+        except FileExistsError:
+            index += 1
+            continue
+
+        try:
+            source.replace(target)
+        except Exception:
+            target.unlink(missing_ok=True)
+            raise
+        return target
+
+
 def generate_shared_key() -> str:
     """Create a new AES-256 key encoded as Base64 for the GitHub secret."""
     return base64.b64encode(secrets.token_bytes(32)).decode("ascii")
@@ -302,8 +329,9 @@ class AudioGitHubClient:
                 "Gói kết quả không có audiobook.mp3 hoàn chỉnh. "
                 "Hãy cập nhật worker SANH-TRUYEN-AUDIO lên phiên bản mới nhất."
             )
-        # The current protocol returns one complete MP3 for the whole novel.
-        return [audiobook]
+        # GitHub returns one merged MP3. Give each local result a unique sequence name.
+        numbered_audiobook = _move_to_next_numbered_audiobook(audiobook, audio_dir)
+        return [numbered_audiobook]
 
     def generate_audio(
         self,

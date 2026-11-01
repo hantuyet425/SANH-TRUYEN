@@ -868,7 +868,7 @@ class AudioPage(BasePage):
             self.history.insert("end", "Chưa có tác vụ audio")
         else:
             for path in files:
-                self.history.insert("end", f"{path.parent.name} · {path.name}")
+                self.history.insert("end", path.name)
 
     def start_actions_job(self):
         if self.busy:
@@ -926,17 +926,18 @@ class AudioPage(BasePage):
     def _audio_job_done(self, outputs):
         self.busy = False
         self.start_button.configure(state="normal")
-        self.job_status.set("Hoàn tất · audiobook.mp3")
+        output_path = outputs[0] if outputs else self.audio_dir
+        output_name = output_path.name if outputs else "file MP3"
+        self.job_status.set(f"Hoàn tất · {output_name}")
         self.job_detail.set(
-            "Đã tải audiobook.mp3 hoàn chỉnh vào thư mục audio cục bộ. "
+            f"Đã tải {output_name} hoàn chỉnh vào thư mục audio cục bộ. "
             "Các đoạn đã được ghép theo thứ tự truyện và giải mã ngay trên máy."
         )
         self._refresh_history()
-        self.app.set_status("Đã tạo xong audiobook.mp3.")
-        output_path = outputs[0] if outputs else self.audio_dir
+        self.app.set_status(f"Đã tạo xong {output_name}.")
         messagebox.showinfo(
             "Tạo audio hoàn tất",
-            f"Đã tạo audiobook.mp3.\nLưu tại:\n{output_path}"
+            f"Đã tạo {output_name} hoàn chỉnh.\nLưu tại:\n{output_path}"
         )
 
     def _audio_job_failed(self, error):
