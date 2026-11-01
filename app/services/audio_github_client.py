@@ -3,7 +3,10 @@ from __future__ import annotations
 import base64
 import io
 import json
+import os
 import secrets
+import shutil
+import subprocess
 import time
 import uuid
 import zipfile
@@ -80,6 +83,85 @@ def load_audio_credentials() -> tuple[str | None, str | None]:
         raise AudioGitHubError(
             "Không đọc được thông tin từ Windows Credential Manager."
         ) from exc
+
+
+def _run_github_cli(args: list[str], input_text: str | None = None) -> str:
+    """Run GitHub CLI without exposing secret values on the command line."""
+    executable = shutil.which("gh")
+    if not executable:
+        raise AudioGitHubError(
+            "Máy chưa tìm thấy GitHub CLI (gh). Hãy cài GitHub CLI và đăng nhập một lần "
+            "bằng lệnh: gh auth login."
+        )
+
+    options = {
+        "input": input_text,
+        "capture_output": True,
+        "text": True,
+        "encoding": "utf-8",
+        "errors": "replace",
+        "timeout": 60,
+        "check": False,
+    }
+    if os.name == "nt":
+        options["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+    try:
+        result = subprocess.run([executable, *args], **options)
+    except subprocess.TimeoutExpired as exc:
+        raise AudioGitHubError("GitHub CLI quá thời gian chờ. Hãy kiểm tra kết nối mạng.") from exc
+    except OSError as exc:
+        raise AudioGitHubError("Không chạy được GitHub CLI trên máy này.") from exc
+
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        if args[:2] == ["auth", "token"]:
+            raise AudioGitHubError(
+                "GitHub CLI chưa đăng nhập. Mở PowerShell và chạy gh auth login một lần; "
+                "ứng dụng sẽ tự lấy quyền đăng nhập, không cần dán PAT vào đây."
+            )
+        suffix = f" Chi tiết: {detail[-500:]}" if detail else ""
+        raise AudioGitHubError(
+            "GitHub CLI không thể cấu hình khóa mã hóa cho repository. "
+            "Hãy kiểm tra quyền quản lý Actions secrets của tài khoản GitHub." + suffix
+        )
+    return (result.stdout or "").strip()
+
+
+def ensure_audio_credentials() -> tuple[str, str]:
+    """
+    Reuse GitHub CLI authentication and automatically provision the AES secret
+    on first use. The user never has to copy a PAT or AES key into the app.
+    """
+    saved_token, shared_key = load_audio_credentials()
+
+    # Prefer the authenticated GitHub CLI identity; fall back to a previously
+    # saved credential for installations that no longer have gh on PATH.
+    try:
+        token = _run_github_cli(["auth", "token", "--hostname", "github.com"])
+    except AudioGitHubError:
+        token = saved_token or ""
+    if not token:
+        raise AudioGitHubError(
+            "Chưa có phiên đăng nhập GitHub trên máy. Mở PowerShell chạy gh auth login "
+            "một lần; SẢNH TRUYỆN sẽ tự sử dụng phiên đăng nhập đó, không hỏi PAT nữa."
+        )
+
+    if not shared_key:
+        shared_key = generate_shared_key()
+        _validate_shared_key(shared_key)
+        # Secret input is sent through stdin, never included in process arguments.
+        _run_github_cli(
+            [
+                "secret", "set", "AUDIO_SHARED_KEY",
+                "--repo", AUDIO_REPOSITORY,
+                "--app", "actions",
+            ],
+            input_text=shared_key,
+        )
+
+    save_audio_credentials(token, shared_key)
+    return token, shared_key
 
 
 def _encrypt_payload(payload: dict, key: bytes) -> bytes:
