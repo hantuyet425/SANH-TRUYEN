@@ -14,10 +14,9 @@ from tkinter import filedialog, messagebox, ttk
 from app.config import PROJECTS_DIR, project_dir_for
 from app.services.audio_github_client import (
     AudioGitHubClient,
-    AudioGitHubError,
-    load_audio_credentials,
+    ensure_audio_credentials,
 )
-from app.ui.pages import AudioConnectionDialog, BasePage
+from app.ui.pages import BasePage
 from app.ui.widgets import (
     BG, COPPER, INPUT, LINE, MUTED, PANEL, RED, TEXT,
     button, eyebrow, field_label, heading, panel, text_box, try_enable_drop,
@@ -351,20 +350,6 @@ class AudioPage(BasePage):
         if not source_text:
             messagebox.showinfo("Nội dung trống", "Không có văn bản để tạo audio.")
             return
-        try:
-            token, shared_key = load_audio_credentials()
-        except AudioGitHubError as exc:
-            messagebox.showerror("Lỗi Credential Manager", str(exc))
-            return
-        if not token or not shared_key:
-            messagebox.showinfo(
-                "Cần cấu hình GitHub Audio",
-                "Ứng dụng cần GitHub PAT và khóa AES để gửi tác vụ đã mã hóa. "
-                "Hãy cấu hình một lần, sau đó bấm BẮT ĐẦU TẠO AUDIO lần nữa.",
-            )
-            AudioConnectionDialog(self, self._credentials_updated)
-            return
-
         if self.audio_dir is None:
             self.audio_dir = PROJECTS_DIR / "Audio-moi" / "audio"
             self.audio_dir.mkdir(parents=True, exist_ok=True)
@@ -409,6 +394,8 @@ class AudioPage(BasePage):
 
         def work():
             try:
+                report("Đang dùng phiên GitHub đã đăng nhập và kiểm tra cấu hình audio...")
+                token, shared_key = ensure_audio_credentials()
                 client = AudioGitHubClient(token, shared_key)
                 outputs = client.generate_audio(
                     source_text, voice, rate, audio_dir, progress=report
@@ -419,9 +406,6 @@ class AudioPage(BasePage):
                 self.after(0, lambda error=str(exc): self._audio_failed(error))
 
         threading.Thread(target=work, daemon=True).start()
-
-    def _credentials_updated(self):
-        self.job_status.set("Đã lưu cấu hình GitHub Audio. Bấm BẮT ĐẦU TẠO AUDIO để chạy.")
 
     def _finish_job_controls(self):
         self.busy = False
