@@ -49,15 +49,19 @@ class AudioPage(BasePage):
 
         left = panel(columns)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        # Grid keeps the content editor flexible while permanently reserving
+        # visible rows for voice, speed and the Create Audio action.
+        left.grid_columnconfigure(0, weight=1)
+        left.grid_rowconfigure(1, weight=1)
         tk.Label(left, text="NỘI DUNG TẠO", bg=PANEL, fg=TEXT,
-                 font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(0, 7))
-        self.content_frame, self.content = text_box(left, 18)
-        self.content_frame.pack(fill="both", expand=True)
+                 font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 7))
+        self.content_frame, self.content = text_box(left, 8)
+        self.content_frame.grid(row=1, column=0, sticky="nsew")
         try_enable_drop(self.content, self.drop_audio)
 
         controls = tk.Frame(left, bg="#1D1412", padx=10, pady=9,
                             highlightthickness=1, highlightbackground=LINE)
-        controls.pack(fill="x", pady=(9, 0))
+        controls.grid(row=2, column=0, sticky="ew", pady=(9, 0))
         field_label(controls, "Giọng đọc", bg="#1D1412").pack(side="left")
         self.voice = tk.StringVar(value="Nam Minh")
         self.voice_combo = ttk.Combobox(
@@ -74,19 +78,22 @@ class AudioPage(BasePage):
         )
         self.rate_combo.pack(side="left", padx=7)
 
-        self.start_button = button(left, "BẮT ĐẦU TẠO AUDIO", self.start_audio, accent=True)
-        self.start_button.pack(anchor="e", pady=(9, 0))
+        self.start_button = button(left, "TẠO AUDIO", self.start_audio, accent=True)
+        self.start_button.grid(row=3, column=0, sticky="e", pady=(9, 0))
 
         right = panel(columns)
         right.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        # The history list may shrink; timer and two required file actions may not.
+        right.grid_columnconfigure(0, weight=1)
+        right.grid_rowconfigure(1, weight=1)
         tk.Label(right, text="LỊCH SỬ TẠO", bg=PANEL, fg=TEXT,
-                 font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(0, 7))
+                 font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 7))
         list_frame = tk.Frame(right, bg=INPUT, highlightthickness=1, highlightbackground=LINE)
-        list_frame.pack(fill="both", expand=True)
+        list_frame.grid(row=1, column=0, sticky="nsew")
         self.history = tk.Listbox(
             list_frame, bg=INPUT, fg=TEXT, selectbackground="#5B1A25",
             relief="flat", bd=0, font=("Segoe UI", 9), activestyle="none",
-            selectmode="browse",
+            selectmode="browse", height=5,
         )
         scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self.history.yview)
         self.history.configure(yscrollcommand=scroll.set)
@@ -94,20 +101,20 @@ class AudioPage(BasePage):
         scroll.pack(side="right", fill="y", pady=5)
         self.history.bind("<<ListboxSelect>>", self.on_history_select)
 
-        timer_panel = tk.Frame(right, bg="#1D1412", padx=12, pady=10,
+        timer_panel = tk.Frame(right, bg="#1D1412", padx=12, pady=8,
                                highlightthickness=1, highlightbackground=LINE)
-        timer_panel.pack(fill="x", pady=(9, 8))
+        timer_panel.grid(row=2, column=0, sticky="ew", pady=(9, 7))
         tk.Label(timer_panel, text="THỜI GIAN TẠO", bg="#1D1412", fg=COPPER,
                  font=("Segoe UI", 8, "bold")).pack(anchor="w")
         self.timer_value = tk.StringVar(value="00:00:00")
         tk.Label(timer_panel, textvariable=self.timer_value, bg="#1D1412", fg=TEXT,
-                 font=("Segoe UI", 22, "bold")).pack(anchor="w", pady=(3, 0))
+                 font=("Segoe UI", 19, "bold")).pack(anchor="w", pady=(2, 0))
         self.job_status = tk.StringVar(value="Chưa có tác vụ")
         tk.Label(right, textvariable=self.job_status, bg=PANEL, fg=MUTED,
-                 font=("Segoe UI", 8), wraplength=300, justify="left").pack(anchor="w", pady=(0, 8))
+                 font=("Segoe UI", 8), wraplength=300, justify="left").grid(row=3, column=0, sticky="w", pady=(0, 7))
 
         result_buttons = tk.Frame(right, bg=PANEL)
-        result_buttons.pack(fill="x")
+        result_buttons.grid(row=4, column=0, sticky="ew")
         self.listen_button = button(result_buttons, "NGHE AUDIO", self.listen_selected, accent=True)
         self.listen_button.pack(side="left", padx=(0, 7))
         self.open_file_button = button(result_buttons, "MỞ FILE", self.open_selected_file)
