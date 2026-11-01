@@ -30,6 +30,7 @@ Bộ đánh số chương liên tục sẽ chuẩn hóa số chương theo thứ
 - Mở TXT hoặc dán nội dung, chọn giọng Nam Minh / Hoài My và tốc độ đọc.
 - Ứng dụng gửi tác vụ đến repo công khai [SANH-TRUYEN-AUDIO](https://github.com/hantuyet425/SANH-TRUYEN-AUDIO) thông qua GitHub Actions.
 - Văn bản gửi lên GitHub được mã hóa AES-256-GCM trước khi tải lên nhánh tạm. Artifact trả về cũng được mã hóa; ứng dụng chỉ giải mã trên máy Windows rồi lưu MP3 trong thư mục audio của dự án.
+- Worker tự chia truyện theo chương và các đoạn ngắn, tổng hợp tối đa **3 đoạn đồng thời**, sau đó ghép tất cả theo đúng thứ tự nguồn thành một file **`audiobook.mp3`** duy nhất. Artifact giải mã chỉ chứa audiobook hoàn chỉnh và manifest thống kê chương/đoạn.
 - Token GitHub và khóa AES được lưu trong Windows Credential Manager; không ghi vào `settings.json`, mã nguồn hay log.
 - Bộ máy dùng Edge TTS trực tuyến trên runner GitHub. Khi tổng hợp, văn bản được giải mã trong runner và gửi đến dịch vụ Edge TTS qua kết nối mạng để tạo giọng đọc. Không dùng workflow này cho nội dung bị cấm gửi tới dịch vụ TTS bên thứ ba.
 
