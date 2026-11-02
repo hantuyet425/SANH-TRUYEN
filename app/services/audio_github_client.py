@@ -332,7 +332,10 @@ class AudioGitHubClient:
             run_id = run.get("id")
             if not run_id:
                 continue
-            artifact = self._find_artifact(int(run_id), f"audio-{job_id}")
+            run_number = run.get("run_number")
+            if not run_number:
+                continue
+            artifact = self._find_artifact(int(run_id), f"au{int(run_number)}")
             if not artifact:
                 continue
 
@@ -451,9 +454,12 @@ class AudioGitHubClient:
 
         if progress:
             progress("Tác vụ hoàn tất. Đang tải MP3 về máy...")
+        run_number = run.get("run_number")
+        if not run_number:
+            raise AudioGitHubError("GitHub không trả về số thứ tự của lần tạo audio.")
         artifact = self._wait_for_artifact(
             int(run["id"]),
-            f"audio-{job_id}",
+            f"au{int(run_number)}",
             time.monotonic() + 90,
         )
         outputs = self._download_and_extract(artifact, job_id, audio_dir)
