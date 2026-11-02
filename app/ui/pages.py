@@ -15,7 +15,7 @@ from app.services.epub_service import convert_epub_to_txt
 from app.services.hachimi_service import HachimiTranslator
 from app.services.tts_service import split_chapters
 from app.services.chapter_numbering import renumber_chapters, count_chapters
-from app.services.audio_github_client import AudioGitHubClient, AudioGitHubError, generate_shared_key, load_audio_credentials, save_audio_credentials
+from app.services.audio_github_client import AudioGitHubClient, AudioGitHubError, load_audio_credentials, save_audio_credentials
 from app.ui.widgets import heading, eyebrow, panel, button, text_box, field_label, try_enable_drop, BG, PANEL, PANEL_2, COPPER, RED, TEXT, MUTED, LINE, INPUT
 
 
@@ -490,75 +490,50 @@ class AudioConnectionDialog(tk.Toplevel):
         super().__init__(parent.winfo_toplevel())
         self.title("Kết nối GitHub Audio")
         self.configure(bg=BG)
-        self.geometry("720x560")
+        self.geometry("720x390")
         self.resizable(False, False)
         self.transient(parent.winfo_toplevel())
         self.grab_set()
         self.on_saved = on_saved
         self.busy = False
 
-        tk.Label(
-            self, text="KẾT NỐI PHÒNG THU GITHUB",
-            bg=BG, fg=COPPER, font=("Segoe UI", 13, "bold")
-        ).pack(anchor="w", padx=24, pady=(22, 5))
+        tk.Label(self, text="KẾT NỐI PHÒNG THU GITHUB", bg=BG, fg=COPPER,
+                 font=("Segoe UI", 13, "bold")).pack(anchor="w", padx=24, pady=(22, 5))
         tk.Label(
             self,
-            text="Token và khóa mã hóa chỉ được lưu trong Windows Credential Manager trên máy này.",
+            text="Chỉ cần GitHub Personal Access Token. Không cần khóa AES hay GitHub Actions Secret.",
             bg=BG, fg=MUTED, font=("Segoe UI", 9), wraplength=660, justify="left"
-        ).pack(anchor="w", padx=24, pady=(0, 16))
+        ).pack(anchor="w", padx=24, pady=(0, 12))
 
-        body = tk.Frame(self, bg=PANEL, padx=18, pady=16, highlightthickness=1, highlightbackground=LINE)
+        body = tk.Frame(self, bg=PANEL, padx=18, pady=16,
+                        highlightthickness=1, highlightbackground=LINE)
         body.pack(fill="x", padx=22)
-        tk.Label(body, text="1. GITHUB PERSONAL ACCESS TOKEN", bg=PANEL, fg=COPPER,
+        tk.Label(body, text="GITHUB PERSONAL ACCESS TOKEN", bg=PANEL, fg=COPPER,
                  font=("Segoe UI", 8, "bold")).pack(anchor="w")
         self.token_var = tk.StringVar()
         try:
-            saved_token, saved_key = load_audio_credentials()
-        except AudioGitHubError as exc:
-            saved_token, saved_key = "", ""
-            self.initial_error = str(exc)
-        else:
+            saved_token = load_audio_credentials()
             self.initial_error = ""
+        except AudioGitHubError as exc:
+            saved_token = ""
+            self.initial_error = str(exc)
         self.token_var.set(saved_token or "")
         token_entry = tk.Entry(
             body, textvariable=self.token_var, show="*", bg=INPUT, fg=TEXT,
             insertbackground=TEXT, relief="flat", font=("Segoe UI", 10)
         )
-        token_entry.pack(fill="x", pady=(6, 6), ipady=7)
+        token_entry.pack(fill="x", pady=(6, 8), ipady=7)
         token_row = tk.Frame(body, bg=PANEL)
         token_row.pack(fill="x")
         button(token_row, "MỞ TRANG TẠO TOKEN", self.open_token_page).pack(side="left")
-        tk.Label(
-            token_row, text="Chọn riêng repo SANH-TRUYEN-AUDIO.",
-            bg=PANEL, fg=MUTED, font=("Segoe UI", 8)
-        ).pack(side="left", padx=10)
+        tk.Label(token_row, text="Chỉ cấp quyền cho repo SANH-TRUYEN-AUDIO.",
+                 bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(side="left", padx=10)
 
-        tk.Frame(body, bg=LINE, height=1).pack(fill="x", pady=14)
-        tk.Label(body, text="2. KHÓA AES-256-GCM DÙNG CHUNG", bg=PANEL, fg=COPPER,
-                 font=("Segoe UI", 8, "bold")).pack(anchor="w")
-        self.key_var = tk.StringVar(value=saved_key or "")
-        key_entry = tk.Entry(
-            body, textvariable=self.key_var, show="*", bg=INPUT, fg=TEXT,
-            insertbackground=TEXT, relief="flat", font=("Segoe UI", 10)
-        )
-        key_entry.pack(fill="x", pady=(6, 7), ipady=7)
-        key_row = tk.Frame(body, bg=PANEL)
-        key_row.pack(fill="x")
-        button(key_row, "TẠO KHÓA MỚI", self.make_key).pack(side="left")
-        button(key_row, "SAO CHÉP KHÓA", self.copy_key).pack(side="left", padx=7)
-        tk.Label(
-            body,
-            text="Đưa đúng khóa này vào GitHub → Settings → Secrets and variables → Actions "
-                 "với tên AUDIO_SHARED_KEY. Nếu tạo khóa mới, phải thay Secret trên GitHub bằng khóa mới.",
-            bg=PANEL, fg=MUTED, font=("Segoe UI", 8), wraplength=630, justify="left"
-        ).pack(anchor="w", pady=(9, 0))
-
-        permissions = tk.Frame(self, bg="#1D1412", padx=14, pady=12, highlightthickness=1, highlightbackground=LINE)
+        permissions = tk.Frame(self, bg="#1D1412", padx=14, pady=12,
+                               highlightthickness=1, highlightbackground=LINE)
         permissions.pack(fill="x", padx=22, pady=12)
-        tk.Label(
-            permissions, text="QUYỀN TOKEN BẮT BUỘC",
-            bg="#1D1412", fg=COPPER, font=("Segoe UI", 8, "bold")
-        ).pack(anchor="w")
+        tk.Label(permissions, text="QUYỀN TOKEN BẮT BUỘC",
+                 bg="#1D1412", fg=COPPER, font=("Segoe UI", 8, "bold")).pack(anchor="w")
         tk.Label(
             permissions,
             text="Fine-grained PAT · Repository access: Only select repositories → SANH-TRUYEN-AUDIO\n"
@@ -567,52 +542,38 @@ class AudioConnectionDialog(tk.Toplevel):
         ).pack(anchor="w", pady=(5, 0))
 
         self.status_var = tk.StringVar(value=self.initial_error or "Chưa kiểm tra kết nối.")
-        tk.Label(
-            self, textvariable=self.status_var, bg=BG, fg=MUTED,
-            font=("Segoe UI", 8), wraplength=660, justify="left"
+        tk.Label(self, textvariable=self.status_var, bg=BG, fg=MUTED,
+                 font=("Segoe UI", 8), wraplength=660, justify="left"
         ).pack(anchor="w", padx=24, pady=(0, 8))
         footer = tk.Frame(self, bg=BG)
         footer.pack(fill="x", padx=22, pady=(0, 18))
-        self.save_button = button(footer, "KIỂM TRA & LƯU AN TOÀN", self.test_and_save, accent=True)
+        self.save_button = button(footer, "KIỂM TRA & LƯU TOKEN",
+                                  self.test_and_save, accent=True)
         self.save_button.pack(side="right")
         button(footer, "ĐÓNG", self.destroy).pack(side="right", padx=8)
 
     def open_token_page(self):
         webbrowser.open("https://github.com/settings/personal-access-tokens/new")
 
-    def make_key(self):
-        self.key_var.set(generate_shared_key())
-        self.status_var.set(
-            "Đã tạo khóa mới. Sao chép khóa và cập nhật GitHub Secret AUDIO_SHARED_KEY trước khi chạy Audio."
-        )
-
-    def copy_key(self):
-        value = self.key_var.get().strip()
-        if not value:
-            messagebox.showwarning("Chưa có khóa", "Hãy tạo hoặc nhập khóa trước.", parent=self)
-            return
-        self.clipboard_clear()
-        self.clipboard_append(value)
-        self.update()
-        self.status_var.set("Đã sao chép khóa. Hãy dán vào GitHub Secret AUDIO_SHARED_KEY.")
-
     def test_and_save(self):
         if self.busy:
             return
         token = self.token_var.get().strip()
-        key = self.key_var.get().strip()
-        if not token or not key:
-            messagebox.showwarning("Thiếu thông tin", "Cần nhập GitHub token và khóa AES.", parent=self)
+        if not token:
+            messagebox.showwarning("Thiếu thông tin",
+                                   "Cần nhập GitHub Personal Access Token.", parent=self)
             return
         self.busy = True
         self.save_button.configure(state="disabled")
-        self.status_var.set("Đang kiểm tra quyền đọc repo/workflow và lưu vào Windows Credential Manager...")
+        self.status_var.set(
+            "Đang kiểm tra quyền đọc repo/workflow và lưu token vào Windows Credential Manager..."
+        )
 
         def work():
             try:
-                client = AudioGitHubClient(token, key)
+                client = AudioGitHubClient(token)
                 client.test_connection()
-                save_audio_credentials(token, key)
+                save_audio_credentials(token)
                 self.after(0, self.saved)
             except Exception as exc:
                 self.after(0, lambda error=str(exc): self.failed(error))
@@ -624,9 +585,7 @@ class AudioConnectionDialog(tk.Toplevel):
         self.on_saved()
         messagebox.showinfo(
             "Đã lưu kết nối",
-            "Đã kiểm tra repo và workflow, thông tin đã được lưu trong Windows Credential Manager.\n\n"
-            "Lưu ý: GitHub không cho ứng dụng đọc lại Actions Secret. Hãy chắc chắn Secret AUDIO_SHARED_KEY "
-            "trên repo khớp chính xác với khóa vừa lưu.",
+            "Đã kiểm tra repo và workflow. GitHub token đã được lưu trong Windows Credential Manager.",
             parent=self
         )
         self.destroy()
@@ -816,13 +775,13 @@ class AudioPage(BasePage):
 
     def _update_connection_status(self):
         try:
-            token, key = load_audio_credentials()
-            configured = bool(token and key)
+            token = load_audio_credentials()
+            configured = bool(token)
         except AudioGitHubError:
             configured = False
         self.connection_status.set(
             "● GitHub Audio đã lưu thông tin kết nối" if configured
-            else "○ Chưa cấu hình GitHub token và khóa mã hóa"
+            else "○ Chưa cấu hình GitHub token"
         )
 
     def configure_connection(self):
@@ -854,7 +813,7 @@ class AudioPage(BasePage):
         self.audio_dir.mkdir(parents=True, exist_ok=True)
         self.file_label.config(text=path.name)
         self.job_status.set("Đã nạp nội dung · sẵn sàng tạo audio")
-        self.job_detail.set("Văn bản chỉ được gửi đi sau khi mã hóa AES-256-GCM.")
+        self.job_detail.set("Lưu ý: văn bản được tải lên nhánh tạm của kho GitHub công khai trong lúc tạo audio; workflow sẽ xóa nhánh sau khi chạy.")
         self._refresh_history()
         self.app.set_status(f"Đã nạp {path.name}")
 
@@ -884,14 +843,14 @@ class AudioPage(BasePage):
             messagebox.showinfo("Chưa có nội dung", "Hãy mở TXT hoặc dán nội dung trước.")
             return
         try:
-            token, shared_key = load_audio_credentials()
+            token = load_audio_credentials()
         except AudioGitHubError as exc:
             messagebox.showerror("Lỗi Credential Manager", str(exc))
             return
-        if not token or not shared_key:
+        if not token:
             messagebox.showinfo(
                 "Chưa cấu hình GitHub",
-                "Hãy chọn CẤU HÌNH GITHUB, nhập Fine-grained PAT và khóa AES trước khi tạo audio."
+                "Hãy chọn CẤU HÌNH GITHUB và nhập Fine-grained PAT trước khi tạo audio."
             )
             self.configure_connection()
             return
@@ -904,7 +863,7 @@ class AudioPage(BasePage):
         self.busy = True
         self.start_button.configure(state="disabled")
         self.job_status.set("Đang chuẩn bị tác vụ...")
-        self.job_detail.set("Đang mã hóa nội dung; chưa tải văn bản rõ lên GitHub.")
+        self.job_detail.set("Đang gửi văn bản lên nhánh tạm GitHub để tạo MP3; nhánh sẽ được xóa khi workflow kết thúc.")
         self.app.set_status("Đang gửi tác vụ audio lên GitHub Actions...")
 
         def report(status):
@@ -915,7 +874,7 @@ class AudioPage(BasePage):
 
         def work():
             try:
-                client = AudioGitHubClient(token, shared_key)
+                client = AudioGitHubClient(token)
                 outputs = client.generate_audio(
                     source_text, voice_name, rate, self.audio_dir, progress=report
                 )
@@ -930,14 +889,14 @@ class AudioPage(BasePage):
         if self.busy:
             return
         try:
-            token, shared_key = load_audio_credentials()
+            token = load_audio_credentials()
         except AudioGitHubError as exc:
             messagebox.showerror("Lỗi Credential Manager", str(exc))
             return
-        if not token or not shared_key:
+        if not token:
             messagebox.showinfo(
                 "Chưa cấu hình GitHub",
-                "Hãy cấu hình GitHub token và khóa AES trước khi tải lại audio."
+                "Hãy cấu hình GitHub token trước khi tải lại audio."
             )
             self.configure_connection()
             return
