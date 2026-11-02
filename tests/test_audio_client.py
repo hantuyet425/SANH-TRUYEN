@@ -137,7 +137,7 @@ class AudioGitHubClientTests(unittest.TestCase):
         request.assert_called_once()
         find_artifact.assert_called_once_with(24680, "au12")
         download.assert_called_once_with(
-            {"id": 13579, "name": f"audio-{job_id}", "expired": False},
+            {"id": 13579, "name": "au12", "expired": False},
             job_id,
             Path("audio"),
         )
