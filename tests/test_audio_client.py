@@ -118,6 +118,7 @@ class AudioGitHubClientTests(unittest.TestCase):
         job_id = "abcdef0123456789abcdef0123456789"
         run = {
             "id": 24680,
+            "run_number": 12,
             "status": "completed",
             "conclusion": "success",
             "display_title": f"Audio job {job_id}",
@@ -127,14 +128,14 @@ class AudioGitHubClientTests(unittest.TestCase):
             self.client, "_request", return_value={"workflow_runs": [run]}
         ) as request, patch.object(
             self.client, "_find_artifact",
-            return_value={"id": 13579, "name": f"audio-{job_id}", "expired": False},
+            return_value={"id": 13579, "name": "au12", "expired": False},
         ) as find_artifact, patch.object(
             self.client, "_download_and_extract", return_value=expected
         ) as download:
             outputs = self.client.download_latest_completed_audio(Path("audio"))
         self.assertEqual(outputs, expected)
         request.assert_called_once()
-        find_artifact.assert_called_once_with(24680, f"audio-{job_id}")
+        find_artifact.assert_called_once_with(24680, "au12")
         download.assert_called_once_with(
             {"id": 13579, "name": f"audio-{job_id}", "expired": False},
             job_id,
