@@ -28,9 +28,9 @@ Bộ đánh số chương liên tục sẽ chuẩn hóa số chương theo thứ
 
 ### 4. Phòng thu audio
 - Mở TXT hoặc dán nội dung, chọn giọng Nam Minh / Hoài My và tốc độ đọc.
-- Ứng dụng gửi tác vụ đến repo công khai [SANH-TRUYEN-AUDIO](https://github.com/hantuyet425/SANH-TRUYEN-AUDIO) thông qua GitHub Actions.
-- Worker chia truyện thành các đoạn, tổng hợp song song, sau đó ghép đúng thứ tự thành một file **`audiobook.mp3`** duy nhất.
-- Artifact trả về chứa MP3 thường và manifest; ứng dụng tải trực tiếp rồi lưu lần lượt thành `au1.mp3`, `au2.mp3`, ...
+- Ứng dụng gửi tác vụ đến repo [SANH-TRUYEN-AUDIO](https://github.com/hantuyet425/SANH-TRUYEN-AUDIO) thông qua GitHub Actions.
+- Worker chia truyện thành các đoạn MP3 riêng, tên như `tts 001-207.mp3`; danh sách GitHub Actions hiển thị `TTS 001/207`. Sau đó worker ghép đúng thứ tự thành `au1.mp3`, `au2.mp3`, `au3.mp3`, ...
+- Trên GitHub Actions, artifact được đóng gói thành ZIP khi tải xuống; bên trong ZIP là các file MP3 thường. Artifact cuối chứa file MP3 thường `auN.mp3` và manifest; ứng dụng tải trực tiếp rồi lưu cục bộ lần lượt thành `au1.mp3`, `au2.mp3`, ...
 - **Không còn AES, khóa mã hóa hay Repository Secret `AUDIO_SHARED_KEY`.** Ứng dụng chỉ cần GitHub PAT và lưu PAT trong Windows Credential Manager.
 - Bộ máy dùng Edge TTS trực tuyến trên runner GitHub; nội dung từng đoạn được gửi đến dịch vụ Edge TTS qua kết nối mạng.
 
