@@ -31,7 +31,7 @@ class AudioGitHubError(RuntimeError):
 def _move_to_next_numbered_audiobook(source: Path, audio_dir: Path) -> Path:
     """Move one completed audiobook to au1.mp3, au2.mp3, ... without overwriting."""
     highest = 0
-    for existing in audio_dir.rglob("au*.mp3"):
+    for existing in audio_dir.glob("au*.mp3"):
         suffix = existing.stem[2:] if existing.stem.lower().startswith("au") else ""
         if suffix.isdigit():
             highest = max(highest, int(suffix))
