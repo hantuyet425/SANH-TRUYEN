@@ -177,7 +177,7 @@ class AudioGitHubClientTests(unittest.TestCase):
             side_effect=[
                 {"full_name": AUDIO_REPOSITORY},
                 {
-                    "path": ".github/workflows/generate-audio.yml",
+                    "path": ".github/workflows/generate-audio-mp3.yml",
                     "state": "disabled_manually",
                 },
             ],
