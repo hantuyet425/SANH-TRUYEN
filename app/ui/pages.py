@@ -920,7 +920,7 @@ class AudioPage(BasePage):
 
         def work():
             try:
-                client = AudioGitHubClient(token, shared_key)
+                client = AudioGitHubClient(token)
                 outputs = client.download_latest_completed_audio(
                     self.audio_dir,
                     progress=report,
