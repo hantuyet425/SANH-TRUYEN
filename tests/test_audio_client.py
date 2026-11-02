@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 
 from app.services.audio_github_client import (
     AUDIO_REPOSITORY,
+    AUDIO_WORKFLOW,
     AudioGitHubClient,
     AudioGitHubError,
 )
@@ -140,8 +141,9 @@ class AudioGitHubClientTests(unittest.TestCase):
             Path("audio"),
         )
 
-    def test_client_targets_audio_worker_repository(self):
+    def test_client_targets_audio_worker_repository_and_m3_workflow(self):
         self.assertEqual(self.client.repository, AUDIO_REPOSITORY)
+        self.assertEqual(AUDIO_WORKFLOW, "generate-audio-mp3.yml")
 
     def test_connection_distinguishes_missing_workflow_from_repository_access(self):
         with patch.object(
