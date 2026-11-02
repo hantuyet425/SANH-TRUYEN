@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import io
 import json
-import secrets
 import time
 import uuid
 import zipfile
@@ -12,15 +11,12 @@ from pathlib import Path
 from typing import Callable
 
 import requests
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 AUDIO_REPOSITORY = "hantuyet425/SANH-TRUYEN-AUDIO"
 AUDIO_WORKFLOW = "generate-audio.yml"
 API_ROOT = "https://api.github.com"
 KEYRING_SERVICE = "SANH-TRUYEN-AUDIO"
 KEYRING_TOKEN_NAME = "github_pat"
-KEYRING_KEY_NAME = "audio_shared_key"
-MAGIC = b"SANHAUDIO1"
 VOICE_IDS = {
     "Nam Minh": "vi-VN-NamMinhNeural",
     "Hoài My": "vi-VN-HoaiMyNeural",
@@ -58,93 +54,47 @@ def _move_to_next_numbered_audiobook(source: Path, audio_dir: Path) -> Path:
         return target
 
 
-def generate_shared_key() -> str:
-    """Create a new AES-256 key encoded as Base64 for the GitHub secret."""
-    return base64.b64encode(secrets.token_bytes(32)).decode("ascii")
-
-
-def _validate_shared_key(shared_key_b64: str) -> bytes:
-    try:
-        key = base64.b64decode(shared_key_b64.strip(), validate=True)
-    except Exception as exc:
-        raise AudioGitHubError("Khóa AUDIO_SHARED_KEY không phải Base64 hợp lệ.") from exc
-    if len(key) != 32:
-        raise AudioGitHubError("Khóa AUDIO_SHARED_KEY phải giải mã thành đúng 32 byte.")
-    return key
-
-
-def save_audio_credentials(token: str, shared_key_b64: str) -> None:
-    """Store credentials in the operating system credential vault via keyring."""
+def save_audio_credentials(token: str) -> None:
+    """Store the GitHub token in Windows Credential Manager."""
     token = token.strip()
     if not token:
         raise AudioGitHubError("Chưa nhập GitHub Personal Access Token.")
-    _validate_shared_key(shared_key_b64)
     try:
         import keyring
         backend = keyring.get_keyring()
         if getattr(backend, "priority", 0) <= 0:
             raise RuntimeError("No secure credential backend is available.")
         keyring.set_password(KEYRING_SERVICE, KEYRING_TOKEN_NAME, token)
-        keyring.set_password(KEYRING_SERVICE, KEYRING_KEY_NAME, shared_key_b64.strip())
         if keyring.get_password(KEYRING_SERVICE, KEYRING_TOKEN_NAME) != token:
             raise RuntimeError("Credential verification failed.")
-        if keyring.get_password(KEYRING_SERVICE, KEYRING_KEY_NAME) != shared_key_b64.strip():
-            raise RuntimeError("Key verification failed.")
+        # Remove the obsolete key saved by an older version.
+        try:
+            keyring.delete_password(KEYRING_SERVICE, "audio_shared_key")
+        except Exception:
+            pass
     except Exception as exc:
         raise AudioGitHubError(
-            "Không lưu được thông tin vào Windows Credential Manager. "
-            "Hãy kiểm tra keyring/Windows Credential Manager rồi thử lại."
+            "Không lưu được GitHub token vào Windows Credential Manager. "
+            "Hãy kiểm tra Windows Credential Manager rồi thử lại."
         ) from exc
 
 
-def load_audio_credentials() -> tuple[str | None, str | None]:
+def load_audio_credentials() -> str | None:
     try:
         import keyring
-        token = keyring.get_password(KEYRING_SERVICE, KEYRING_TOKEN_NAME)
-        shared_key = keyring.get_password(KEYRING_SERVICE, KEYRING_KEY_NAME)
-        return token, shared_key
+        return keyring.get_password(KEYRING_SERVICE, KEYRING_TOKEN_NAME)
     except Exception as exc:
         raise AudioGitHubError(
-            "Không đọc được thông tin từ Windows Credential Manager."
-        ) from exc
-
-
-def _encrypt_payload(payload: dict, key: bytes) -> bytes:
-    nonce = secrets.token_bytes(12)
-    plaintext = json.dumps(
-        payload, ensure_ascii=False, separators=(",", ":")
-    ).encode("utf-8")
-    ciphertext = AESGCM(key).encrypt(nonce, plaintext, MAGIC)
-    envelope = {
-        "version": 1,
-        "nonce": base64.b64encode(nonce).decode("ascii"),
-        "ciphertext": base64.b64encode(ciphertext).decode("ascii"),
-    }
-    return json.dumps(envelope, separators=(",", ":")).encode("utf-8")
-
-
-def _decrypt_result(encrypted_data: bytes, key: bytes) -> bytes:
-    try:
-        envelope = json.loads(encrypted_data.decode("utf-8"))
-        if envelope.get("version") != 1:
-            raise ValueError("unsupported envelope version")
-        nonce = base64.b64decode(envelope["nonce"], validate=True)
-        ciphertext = base64.b64decode(envelope["ciphertext"], validate=True)
-        return AESGCM(key).decrypt(nonce, ciphertext, MAGIC)
-    except Exception as exc:
-        raise AudioGitHubError(
-            "Không giải mã được kết quả audio. Hãy kiểm tra khóa AUDIO_SHARED_KEY "
-            "trong ứng dụng có trùng với GitHub Actions secret hay không."
+            "Không đọc được GitHub token từ Windows Credential Manager."
         ) from exc
 
 
 class AudioGitHubClient:
-    def __init__(self, token: str, shared_key_b64: str, repository: str = AUDIO_REPOSITORY):
+    def __init__(self, token: str, repository: str = AUDIO_REPOSITORY):
         self.repository = repository
         self.token = token.strip()
         if not self.token:
             raise AudioGitHubError("Chưa cấu hình GitHub token.")
-        self.key = _validate_shared_key(shared_key_b64)
         self.session = requests.Session()
         self.session.headers.update({
             "Accept": "application/vnd.github+json",
@@ -301,6 +251,7 @@ class AudioGitHubClient:
         )
 
     def _download_and_extract(self, artifact: dict, job_id: str, audio_dir: Path) -> list[Path]:
+        """Download the artifact ZIP and save its ordinary audiobook MP3."""
         artifact_id = artifact.get("id")
         if not artifact_id:
             raise AudioGitHubError("GitHub artifact không có ID hợp lệ.")
@@ -311,49 +262,31 @@ class AudioGitHubClient:
         except requests.RequestException as exc:
             raise AudioGitHubError("Không tải được artifact audio từ GitHub.") from exc
 
+        job_dir = audio_dir / f"audio_{job_id[:8]}"
+        job_dir.mkdir(parents=True, exist_ok=True)
+        audiobook_member = None
+        manifest_member = None
         try:
-            with zipfile.ZipFile(io.BytesIO(response.content)) as outer:
-                encrypted_member = next(
-                    (name for name in outer.namelist() if Path(name).name == "audio-result.enc"),
-                    None,
-                )
-                if not encrypted_member:
-                    raise AudioGitHubError("Artifact không chứa audio-result.enc.")
-                encrypted_audio = outer.read(encrypted_member)
+            with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+                for name in archive.namelist():
+                    if Path(name).name == "audiobook.mp3":
+                        audiobook_member = name
+                    elif Path(name).name == "manifest.json":
+                        manifest_member = name
+                if not audiobook_member:
+                    raise AudioGitHubError(
+                        "Artifact không chứa audiobook.mp3. Hãy kiểm tra lần chạy GitHub Actions."
+                    )
+                audiobook_path = job_dir / "audiobook.mp3"
+                audiobook_path.write_bytes(archive.read(audiobook_member))
+                if manifest_member:
+                    (job_dir / "manifest.json").write_bytes(archive.read(manifest_member))
         except zipfile.BadZipFile as exc:
             raise AudioGitHubError("Artifact GitHub tải về không phải ZIP hợp lệ.") from exc
 
-        clear_zip = _decrypt_result(encrypted_audio, self.key)
-        job_dir = audio_dir / f"audio_{job_id[:8]}"
-        job_dir.mkdir(parents=True, exist_ok=True)
-        outputs: list[Path] = []
-        try:
-            with zipfile.ZipFile(io.BytesIO(clear_zip)) as archive:
-                for info in archive.infolist():
-                    if info.is_dir():
-                        continue
-                    name = info.filename
-                    # The worker currently writes only flat MP3 files and manifest.json.
-                    if Path(name).name != name:
-                        continue
-                    suffix = Path(name).suffix.lower()
-                    if suffix != ".mp3" and name != "manifest.json":
-                        continue
-                    target = job_dir / name
-                    target.write_bytes(archive.read(info))
-                    if suffix == ".mp3":
-                        outputs.append(target)
-        except zipfile.BadZipFile as exc:
-            raise AudioGitHubError("Gói audio sau giải mã không phải ZIP hợp lệ.") from exc
-
-        audiobook = job_dir / "audiobook.mp3"
-        if not audiobook.is_file() or audiobook not in outputs:
-            raise AudioGitHubError(
-                "Gói kết quả không có audiobook.mp3 hoàn chỉnh. "
-                "Hãy cập nhật worker SANH-TRUYEN-AUDIO lên phiên bản mới nhất."
-            )
-        # GitHub returns one merged MP3. Give each local result a unique sequence name.
-        numbered_audiobook = _move_to_next_numbered_audiobook(audiobook, audio_dir)
+        if not audiobook_path.is_file() or audiobook_path.stat().st_size == 0:
+            raise AudioGitHubError("File audiobook.mp3 tải về đang trống hoặc không hợp lệ.")
+        numbered_audiobook = _move_to_next_numbered_audiobook(audiobook_path, audio_dir)
         return [numbered_audiobook]
 
     def download_latest_completed_audio(
@@ -389,7 +322,7 @@ class AudioGitHubClient:
                 continue
 
             if progress:
-                progress("Đã tìm thấy audiobook đã tạo. Đang tải và giải mã file...")
+                progress("Đã tìm thấy audiobook đã tạo. Đang tải file MP3...")
             return self._download_and_extract(artifact, job_id, Path(audio_dir))
 
         raise AudioGitHubError(
@@ -423,12 +356,15 @@ class AudioGitHubClient:
             "voice": voice,
             "rate": float(rate),
         }
-        encrypted_payload = _encrypt_payload(payload, self.key)
+        payload_bytes = json.dumps(
+            payload, ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")
+        payload_b64 = base64.b64encode(payload_bytes).decode("ascii")
         audio_dir = Path(audio_dir)
         audio_dir.mkdir(parents=True, exist_ok=True)
 
         if progress:
-            progress("Đang chuẩn bị bản mã hóa và nhánh tác vụ tạm...")
+            progress("Đang chuẩn bị nội dung và nhánh tác vụ tạm...")
         ref = self._request("GET", "git/ref/heads/main")
         main_sha = ref["object"]["sha"]
         self._request(
@@ -438,13 +374,13 @@ class AudioGitHubClient:
         )
         dispatch_sent = False
         try:
-            payload_path = f"contents/audio_jobs/{job_id}/payload.json.enc"
+            payload_path = f"contents/audio_jobs/{job_id}/payload.json"
             self._request(
                 "PUT",
                 payload_path,
                 json={
-                    "message": "Upload encrypted audio job",
-                    "content": base64.b64encode(encrypted_payload).decode("ascii"),
+                    "message": "Upload plain audio job payload",
+                    "content": payload_b64,
                     "branch": branch,
                 },
             )
@@ -499,7 +435,7 @@ class AudioGitHubClient:
             raise AudioGitHubError("Không xác nhận được trạng thái hoàn tất của tác vụ audio.")
 
         if progress:
-            progress("Tác vụ hoàn tất. Đang tải và giải mã MP3 về máy...")
+            progress("Tác vụ hoàn tất. Đang tải MP3 về máy...")
         artifact = self._wait_for_artifact(
             int(run["id"]),
             f"audio-{job_id}",
