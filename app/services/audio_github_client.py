@@ -82,7 +82,13 @@ def save_audio_credentials(token: str) -> None:
 def load_audio_credentials() -> str | None:
     try:
         import keyring
-        return keyring.get_password(KEYRING_SERVICE, KEYRING_TOKEN_NAME)
+        token = keyring.get_password(KEYRING_SERVICE, KEYRING_TOKEN_NAME)
+        # Clean up the obsolete AES key left by older desktop versions.
+        try:
+            keyring.delete_password(KEYRING_SERVICE, "audio_shared_key")
+        except Exception:
+            pass
+        return token
     except Exception as exc:
         raise AudioGitHubError(
             "Không đọc được GitHub token từ Windows Credential Manager."
