@@ -278,7 +278,7 @@ class AudioGitHubClient:
             with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
                 for name in archive.namelist():
                     filename = Path(name).name
-                    if re.fullmatch(r"au[1-9][0-9]*\\.mp3", filename):
+                    if re.fullmatch(r"au[1-9][0-9]*\.mp3", filename):
                         audio_member = name
                     elif filename == "audiobook.mp3":
                         legacy_member = name
