@@ -29,8 +29,8 @@ class AudioGitHubClientTests(unittest.TestCase):
 
     def test_download_extracts_plain_full_audiobook(self):
         artifact_data = self.make_artifact({
-            "audiobook.mp3": b"the-whole-novel",
-            "manifest.json": b'{"audio_file":"audiobook.mp3"}',
+            "au7.mp3": b"the-whole-novel",
+            "manifest.json": b'{"audio_file":"au7.mp3"}',
         })
         response = Mock()
         response.content = artifact_data
@@ -51,8 +51,8 @@ class AudioGitHubClientTests(unittest.TestCase):
 
     def test_each_new_audiobook_gets_the_next_au_number(self):
         artifact_data = self.make_artifact({
-            "audiobook.mp3": b"one-complete-book",
-            "manifest.json": b'{"audio_file":"audiobook.mp3"}',
+            "au12.mp3": b"one-complete-book",
+            "manifest.json": b'{"audio_file":"au12.mp3"}',
         })
         response = Mock()
         response.content = artifact_data
