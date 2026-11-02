@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import re
 import time
 import uuid
 import zipfile
@@ -13,7 +14,7 @@ from typing import Callable
 import requests
 
 AUDIO_REPOSITORY = "hantuyet425/SANH-TRUYEN-AUDIO"
-AUDIO_WORKFLOW = "generate-audio.yml"
+AUDIO_WORKFLOW = "generate-audio-mp3.yml"
 API_ROOT = "https://api.github.com"
 KEYRING_SERVICE = "SANH-TRUYEN-AUDIO"
 KEYRING_TOKEN_NAME = "github_pat"
@@ -270,28 +271,36 @@ class AudioGitHubClient:
 
         job_dir = audio_dir / f"audio_{job_id[:8]}"
         job_dir.mkdir(parents=True, exist_ok=True)
-        audiobook_member = None
+        audio_member = None
+        legacy_member = None
         manifest_member = None
         try:
             with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
                 for name in archive.namelist():
-                    if Path(name).name == "audiobook.mp3":
-                        audiobook_member = name
-                    elif Path(name).name == "manifest.json":
+                    filename = Path(name).name
+                    if re.fullmatch(r"au[1-9][0-9]*\\.mp3", filename):
+                        audio_member = name
+                    elif filename == "audiobook.mp3":
+                        legacy_member = name
+                    elif filename == "manifest.json":
                         manifest_member = name
-                if not audiobook_member:
+
+                # Prefer the new auN.mp3 naming, but keep old artifacts downloadable.
+                audio_member = audio_member or legacy_member
+                if not audio_member:
                     raise AudioGitHubError(
-                        "Artifact không chứa audiobook.mp3. Hãy kiểm tra lần chạy GitHub Actions."
+                        "Artifact không chứa file auN.mp3. Hãy kiểm tra lần chạy GitHub Actions."
                     )
-                audiobook_path = job_dir / "audiobook.mp3"
-                audiobook_path.write_bytes(archive.read(audiobook_member))
+                local_audio_name = Path(audio_member).name
+                audiobook_path = job_dir / local_audio_name
+                audiobook_path.write_bytes(archive.read(audio_member))
                 if manifest_member:
                     (job_dir / "manifest.json").write_bytes(archive.read(manifest_member))
         except zipfile.BadZipFile as exc:
             raise AudioGitHubError("Artifact GitHub tải về không phải ZIP hợp lệ.") from exc
 
         if not audiobook_path.is_file() or audiobook_path.stat().st_size == 0:
-            raise AudioGitHubError("File audiobook.mp3 tải về đang trống hoặc không hợp lệ.")
+            raise AudioGitHubError("File MP3 tải về đang trống hoặc không hợp lệ.")
         numbered_audiobook = _move_to_next_numbered_audiobook(audiobook_path, audio_dir)
         return [numbered_audiobook]
 
@@ -449,5 +458,5 @@ class AudioGitHubClient:
         )
         outputs = self._download_and_extract(artifact, job_id, audio_dir)
         if progress:
-            progress("Đã nhận audiobook.mp3 hoàn chỉnh.")
+            progress("Đã nhận audiobook MP3 hoàn chỉnh.")
         return outputs
